@@ -1,0 +1,21 @@
+@charset "UTF-8";
+
+.wmd-effect {
+	text-shadow: 0px 0px 7px #c74a2d;
+}
+
+.wmd-item-price {
+	background: rgb(71, 71, 19);
+    corner-shape: squircle;
+    border-radius: 15px;
+	padding-left: 0.25em;
+    padding-right: 0.25em;
+}
+
+.subtle-anchor {
+	text-decoration: none;
+}
+
+.dice {
+	font-weight: bold;
+}
