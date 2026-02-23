@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 /**
  * @typedef {object} MDBlock
  * @property {number} kind
- * @property {string[]} text
+ * @property {string | string[]} text
  */
 
 /**
@@ -34,16 +34,16 @@ export const MDFlag = Object.freeze({
  * @returns {MDBlock}
  */
 const mdLexer = (line) => {
-	if (line.startsWith("# "))      return { kind: MDFlag.H1,    text: [line.replace(/^# /,          "").trim()] };
-	if (line.startsWith("## "))     return { kind: MDFlag.H2,    text: [line.replace(/^## /,         "").trim()] };
-	if (line.startsWith("### "))    return { kind: MDFlag.H3,    text: [line.replace(/^### /,        "").trim()] };
-	if (line.startsWith("#### "))   return { kind: MDFlag.H4,    text: [line.replace(/^#### /,       "").trim()] };
-	if (line.startsWith("##### "))  return { kind: MDFlag.H5,    text: [line.replace(/^##### /,      "").trim()] };
-	if (line.startsWith("###### ")) return { kind: MDFlag.H6,    text: [line.replace(/^###### /,     "").trim()] };
+	if (line.startsWith("# "))      return { kind: MDFlag.H1,    text: line.replace(/^# /,          "").trim() };
+	if (line.startsWith("## "))     return { kind: MDFlag.H2,    text: line.replace(/^## /,         "").trim() };
+	if (line.startsWith("### "))    return { kind: MDFlag.H3,    text: line.replace(/^### /,        "").trim() };
+	if (line.startsWith("#### "))   return { kind: MDFlag.H4,    text: line.replace(/^#### /,       "").trim() };
+	if (line.startsWith("##### "))  return { kind: MDFlag.H5,    text: line.replace(/^##### /,      "").trim() };
+	if (line.startsWith("###### ")) return { kind: MDFlag.H6,    text: line.replace(/^###### /,     "").trim() };
 	if (line.match(/^[-+*] {1,4}/)) return { kind: MDFlag.Ulist, text: [line.replace(/^[-+*] {1,4}/, "").trim()] };
 	if (line.match(/^\d+\. {1,4}/)) return { kind: MDFlag.Olist, text: [line.replace(/^\d+\. {1,4}/, "").trim()] };
-	if (line.trim().length === 0)   return { kind: MDFlag.Empty, text: [ "" ] };
-									return { kind: MDFlag.Para,  text: [line.trim()] };
+	if (line.trim().length === 0)   return { kind: MDFlag.Empty, text: "" };
+									return { kind: MDFlag.Para,  text: line.trim() };
 }
 
 /**
@@ -65,12 +65,14 @@ export const parseMarkdown = (fname) => {
 		//Skip multiple empty lines in a row
 		if (item.kind === MDFlag.Empty && last().kind === MDFlag.Empty) continue;
 		//Merge sequential Paragraphs into a single Paragraph
-		if (item.kind === MDFlag.Para && last().kind === MDFlag.Para) {last().text[0] += " " + item.text[0]; continue;}
+		if (item.kind === MDFlag.Para && last().kind === MDFlag.Para) {last().text += " " + item.text; continue;}
 		//Combine sequential list items (of the same kind)
 		if (item.kind === MDFlag.Olist && last().kind === MDFlag.Olist) {last().text = last().text.concat(item.text); continue;}
 		if (item.kind === MDFlag.Ulist && last().kind === MDFlag.Ulist) {last().text = last().text.concat(item.text); continue;}
 		//If a paragraph follows a list, merge the paragraph text with the last entry in the list
-		if (item.kind === MDFlag.Para && [MDFlag.Olist, MDFlag.Ulist].includes(last().kind)) {last().text[last().text.length - 1] += " " + item.text[0]; continue;} //💩🚽🤢
+		if (item.kind === MDFlag.Para && [MDFlag.Olist, MDFlag.Ulist].includes(last().kind)) {
+			last().text[last().text.length - 1] += " " + item.text; continue;
+		} //💩🚽🤢
 
 		//Otherwise add item to the output
 		outQueue.push(item);
@@ -84,6 +86,7 @@ export const parseMarkdown = (fname) => {
  */
 export const processLine = (line) => {
 	return line
+	.replace(/\*\*(.*?)\*\*/g, `<strong>$1</strong>`) //Markdown bolding
 	.replace(/\[\[(.*?)\]\] ?\((\d+?)\)/g, `<a href="#$1">$1 <span>($2)</span></a>`) //Skill reference with minimum difficulty
 	.replace(/\[\[(.*?)\]\]/g, `<a href="#$1">$1</a>`)               //Linkable item
 	.replace(/!!(.*?)!!/g, `<strong class="wmd-effect">$1</strong>`) //Glow effect
@@ -120,7 +123,7 @@ export const renderMarkdownToHTML = (parsedMarkdown) => {
 
 
 		//Emit HTML for the current item
-		const content = (![MDFlag.Olist, MDFlag.Ulist].includes(item.kind)) ? processLine(item.text[0]) : processLine(item.text.map(e => `<li>${e}</li>`).join(""));
+		const content = (![MDFlag.Olist, MDFlag.Ulist].includes(item.kind)) ? processLine(item.text) : processLine(item.text.map(e => `<li>${e}</li>`).join(""));
 		if (item.kind === MDFlag.H1) outputHTMLString += `<h1><a id="${content}" href="#${content}">${content}</a></h1>`;
 		if (item.kind === MDFlag.H2) outputHTMLString += `<h2><a id="${content}" href="#${content}">${content}</a></h2>`;
 		if (item.kind === MDFlag.H3) outputHTMLString += `<h3><a id="${content}" href="#${content}">${content}</a></h3>`;

@@ -1,45 +1,46 @@
 # Skills
 
 <!-- Awareness -->
-## Remain Unseen
+## Awareness Skills
+### Remain Unseen
 Ability to remain totally unnoticed
-## Notice
+### Notice
 How finely attuned are your senses?
-## Conceal Truth
+### Conceal Truth
 Misrepresent, lie, or give false impressions; either verbal or physical; disguise searches
-## Blend In
+### Blend In
 Melt into the crowd, fit into your surroundings, or hide in plain sight
-## Gague Intent
+### Gague Intent
 Understand meaning behind behaviours or actions
-<hr/>
 
 <!-- Manners -->
-## Elite Society
-## Educated Society
-## Commoner Society
-## Criminal Society
-<hr/>
+## Manners
+### Elite Society
+### Educated Society
+### Commoner Society
+### Criminal Society
 
 <!-- Body -->
-## Reaction Speed
-## Physical Effort
+## Body Skills
+### Reaction Speed
+### Physical Effort
 Feats of strength and coordination
-## Iron Will?
-## Grit Teeth
+### Iron Will?
+### Grit Teeth
 Resist pain, poison, torture, drugs, harsh weather
-<hr/>
 
 <!-- Combat -->
-## Evade
-## Brawl & Wrestle
-## Melee Weapon
-## Handgun
-## Long Gun
-<hr/>
+## Combat Skills
+### Evade
+### Brawl & Wrestle
+### Melee Weapon
+### Handgun
+### Long Gun
 
 <!-- Specialist -->
-## Chemistry
-## Ætheric Engineering
-## First Aid
-## Code Breaker
-## Research
+## Specialist
+### Chemistry
+### Ætheric Engineering
+### First Aid
+### Code Breaker
+### Research
