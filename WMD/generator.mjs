@@ -19,10 +19,32 @@ const enhancements = [
 	{name: "Mechano-Arm", price: 1000, description: "A sturdy mechanical arm with sense feedback. Room for one enhancement."},
 	{name: "Mechano-Leg", price: 1000, description: "A sturdy mechanical leg with sense feedback. Room for one enhancement."},
 	{name: "Intravenous Port", price: 100, description: "Allows non-alchemists to inject alchemical [[Infusions]] or less reputable substances. Often seen on the necks and arms of soldiers and addicts."},
-	{name: "Auto-Scribe", price: 200, description: "Pressing the carefully machined glass lens against writing lets the auto-scribe copy the document. At a rate of 6 pages per minute, the encoded instructions to replicate the writing is typewritten into the attached metal drum. Roughly the size of a brick."},
 	{name: "Dolman's Liver", price: 500, description: "Created by targeted application of polarized æther, a Dolman's Liver permanently increases the body's ability to process toxins. !!Add +1 die to [[Grit Teeth]] tests involving poison or toxin.!!"},
 	{name: "Finger Gun", price: 250, description: "This artificial finger conceals a single-shot derringer. Can be used by fleshy or prosthetic hands."},
 	//{name: "Mergills", price: 500, description: ""},
+	{name: "Prosthetic Eye", price: 150, description: "A prosthetic eye connected to the optic nerves. Lenses made from inferior quality machined glass make focusing hard for the wearer. !!+1 Difficulty for [[Reaction Speed]] tests relying on sight.!!"},
+	{name: "Mechano-Eye", price: 500, description: "Precision-machined crystals reproduce natural sight. Room for one enhancement."},
+	{name: "", price: null, description: ""},
+];
+
+/**
+ * @type {Gear[]}
+*/
+const gear = [
+	{name: "Auto-Scribe", price: 200, description: "Pressing the carefully machined glass lens against writing lets the auto-scribe copy the document. At a rate of 6 pages per minute, the encoded instructions to replicate the writing is typewritten into the attached metal drum. Roughly the size of a brick."},
+	{name: "Quickwire", price: 50, description: "50m of wire made from a copper-silver alloy. Used to connect ætheric devices."},
+	{name: "Lead-Plated Quickwire", price: 150, description: "50m of Quickwire. Lead plating prevents external disruption or inspection of signals. Used to connect ætheric devices."},
+	{name: "Quickwire Tap", price: 100, description: "Allows you to tap into an existing quickwire network. Unless specified, the tap allows signals to enter but not exit your sub-network."},
+	{name: "Compact Telegraph", price: 200, description: "A favourite amongst less scrupulous gamblers. Operated by a spring-loaded lever, compact telegraphs transmit a series of dots and dashes. Can be connected by [[Quickwire]]."},
+	{name: "Remote Transceiver", price: 200, description: "Vibrating crystals allow for signal transmission and reception at a distance. Transmissions are blocked by 3 floors of a building, large amounts of stone, or any quantity of lead. Dials allow you to tune transceivers to particular wavelengths. Compatable with [[Quickwire]] networks."},
+	{name: "Manual Trigger", price: 50, description: "Comfortably held in one's hand, a manual trigger can be used with [[Quickwire]] to activate ætheric devices or detonate explosives."},
+	{name: "Tripwire Trigger", price: 50, description: "A thin wire is suspended between two points, typically at foot level. Activates connected explosive or ætheric devices when the wire is removed. The signal can be transmitted by [[Quickwire]]."},
+	{name: "Microphone Bug", price: 100, description: "A small microphone records nearby sounds. Powered by a small æther resevoir, it can transmit signals over [[Quickwire]]."},
+	{name: "Headset", price: 250, description: "Two earphones are connected by an adjustable armature; designed to reproduce sounds at a distance. Has a small clip designed to connect to [[Quickwire]]."},
+	{name: "Speaker", price: 100, description: "A metal mesh designed to reproduce sounds at a distance. Has a dial to control volume. Can receive signals over [[Quickwire]]."},
+	{name: "Suitcase", price: 10, description: "A portable container large enough to store several changes of clothes. Common accessory."},
+	{name: "Lead-Lined Suitcase", price: 200, description: "A portable container with a special lining. Lead behind the inner lining prevents remote inspection of the bag's contents or æther leakage from exiting."},
+	{name: "Cigarettes", price: 10, description: "A carton of 'Strike it Rich: Dwarves Choice' cigarettes."},
 	{name: "", price: null, description: ""},
 ];
 
@@ -117,8 +139,9 @@ const outputHTML = `
 	<body>
 		<article>
 			<h1>WMD</h1>
-			${makeTableOfContents(["Enhancements", "Grenades", ...markdownTitles])}
+			${makeTableOfContents(["Gear", "Enhancements", "Grenades", ...markdownTitles])}
 
+			${makeSection("Gear", gear.map(gearTransformer).join(""))}
 			${makeSection("Enhancements", enhancements.map(gearTransformer).join(""))}
 			${makeSection("Grenades",     grenades.map(gearTransformer).join(""))}
 		</article>
