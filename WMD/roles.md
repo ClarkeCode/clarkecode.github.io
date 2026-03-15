@@ -46,7 +46,7 @@ Inflict 2d6 damage directly to HP when injected or consumed. Unpleasant tingling
 
 
 
-## Archanist
+## Arcanist
 - Role ability: **Ætherlink**
 
 Make a connection with a target in line-of-sight within 50 meters. An [[Arcanist]] can sense the distance (but not direction) of a connected target. Maintaining a connection does not require line of sight. Connections break when the distance between a target and the [[Arcanist]] exceeds 50 meters. An [[Arcanist]] can use an [[Action]] to manifest up to 3 [[Invocations]] (Only 1 Invocation per connection per turn).
@@ -118,12 +118,20 @@ A [[Goon]] has the benefit of one of the following archetypes:
 
 ### Goon Capabilities
 A [[Goon]] has a number of capabilities equal to the [[Underboss]]'s rank:
-- **Motor Pool**: (1wk repairs)
-- **Lookout**:
-- **Small Arms Training**:
-- **Heavy Weapons Guy**:
-- **Arcane Engineer**:
-- **Clothier / Tailor**:
-- **Amateur Chemist**:
-- **Private Eye**: (Research + Stakeout)
-- **Costume Stealth Guy**:
+- **Motor Pool**: This goon has access to common cars and trucks. Repairing a vehicle takes the goon one week.
+- **Lookout**: This goon is accomplished at scanning crowds and warning when you're about to have unexpected company.
+- **Small Arms Training**: This goon is competent with handguns and other small-arms weapons.
+- **Heavy Weapons Guy**: This goon is competent with long-gun weapons.
+- **Arcane Engineer**: This goon is competent with operating ætheric devices and knows basic arcane theory.
+- **Tailor**: This goon is able to create or modify clothing. He requires one day to create one full set of clothes or to modify 2 sets of existing clothes. If being used as a disguise, the clothes will only stand up to close scrutiny if the Tailor used the appropriate materials.
+- **Amateur Chemist**: This goon can synthesize one dose per day from the list of [[Infusions]]. Still requires money to buy alchemical catalysts.
+- **Private Eye**: This goon is able to perform a Stakeout: for one week, the goon will attempt to track his target at a distance and report unusual behaviour to his [[Underboss]]
+- **Auditor**: This goon is able to perform Research: for one week, the goon will use broadsheets, libraries, and other publicly available sources of information to compile a dossier about a person or organization.
+- **Covert Training**: This goon has been trained to keep a low profile in a crowd and stay unremarkable.
+
+
+
+
+
+
+
