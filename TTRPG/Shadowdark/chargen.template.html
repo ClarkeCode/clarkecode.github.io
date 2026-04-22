@@ -1,0 +1,64 @@
+<html>
+	<head>
+		<title>Chargen</title>
+		<script>
+			console.log("Hihi");
+		</script>
+		<style>
+			table {
+			border: 1px solid black;
+			}
+		</style>
+	</head>
+	<body>
+		<h1>Shadowdark Character Generator</h1>
+		<div>
+			<button onclick='currentChar = makeChar(); refreshChar();'>
+				New Character
+			</button>
+			<button onclick='currentChar.name = currentChar.race.charNameFunc(); refreshChar();'>
+				Reroll Name
+			</button>
+			<!--
+			<button onclick='currentChar.background = background(); refreshChar();'>
+				Reroll Background
+			</button>
+			-->
+			<button id="reroll.stats" onclick='currentChar.stats = statline(); refreshChar();'>
+				Reroll Stats
+			</button>
+			<button id="reroll.languages" onclick='currentChar.languages = currentChar.race.languageListFunc(); refreshChar();'>
+				Reroll Languages
+			</button>
+		</div>
+
+		<div id="char.card" style="visibility: hidden;">
+			<h2><span id="char.name">NAME</span>, <span id="char.alignment">ALIGNMENT</span> <span id="char.race">RACE</span></h2>
+			<p>
+				<strong><span id="char.trait.name">RACE</span></strong>:
+				<span id="char.trait.desc">RACE</span>
+			</p>
+			<table>
+				<tr>
+					<td><strong>STR:</strong> <span id="char.str">0</span></td>
+					<td><strong>DEX:</strong> <span id="char.dex">0</span></td>
+					<td><strong>CON:</strong> <span id="char.con">0</span></td>
+				</tr>
+				<tr>
+					<td><strong>WIS:</strong> <span id="char.wis">0</span></td>
+					<td><strong>INT:</strong> <span id="char.int">0</span></td>
+					<td><strong>CHA:</strong> <span id="char.cha">0</span></td>
+				</tr>
+			</table>
+			<p>
+				<strong><span id="char.background.name">BG</span></strong>:
+				<span id="char.background.desc">BG</span>
+			</p>
+
+			<h3>Languages</h3>
+			<ul id="char.languages">
+				<li>33</li>
+			</ul>
+		</div>
+	</body>
+</html>
