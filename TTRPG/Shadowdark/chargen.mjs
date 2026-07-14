@@ -118,12 +118,12 @@ const getLanguagesFromList = (languages, randomLanguages, ...guaranteedLanguages
 
 
 //Names p38
-const dwarfNames = () => randSelect(["Hilde", "Torbin", "Marga", "Bruno", "Karina", "Naugrim", "Brenna", "Darvin", "Elga", "Alric", "Isolde", "Gendry", "Bruga", "Junnor", "Vidrid", "Torson", "Brielle", "Ulfgar", "Sarna", "Grimm"]);
-const elfNames = () => randSelect(["Eliara", "Ryarn", "Sariel", "Tirolas", "Galira", "Varos", "Daeniel", "Axidor", "Hiralia", "Cyrwin", "Lothiel", "Zaphiel", "Nayra", "Ithior", "Amriel", "Elyon", "Jirwyn", "Natinel", "Fiora", "Ruhiel"]);
-const goblinNames = () => randSelect(["Iggs", "Tark", "Nix", "Lenk", "Roke", "Fitz", "Tila", "Riggs", "Prim", "Zeb", "Finn", "Borg", "Yark", "Deeg", "Nibs", "Brak", "Fink", "Rizzo", "Squib", "Grix"]);
+const dwarfNames    = () => randSelect(["Hilde", "Torbin", "Marga", "Bruno", "Karina", "Naugrim", "Brenna", "Darvin", "Elga", "Alric", "Isolde", "Gendry", "Bruga", "Junnor", "Vidrid", "Torson", "Brielle", "Ulfgar", "Sarna", "Grimm"]);
+const elfNames      = () => randSelect(["Eliara", "Ryarn", "Sariel", "Tirolas", "Galira", "Varos", "Daeniel", "Axidor", "Hiralia", "Cyrwin", "Lothiel", "Zaphiel", "Nayra", "Ithior", "Amriel", "Elyon", "Jirwyn", "Natinel", "Fiora", "Ruhiel"]);
+const goblinNames   = () => randSelect(["Iggs", "Tark", "Nix", "Lenk", "Roke", "Fitz", "Tila", "Riggs", "Prim", "Zeb", "Finn", "Borg", "Yark", "Deeg", "Nibs", "Brak", "Fink", "Rizzo", "Squib", "Grix"]);
 const halflingNames = () => randSelect(["Willow", "Benny", "Annie", "Tucker", "Marie", "Hobb", "Cora", "Gordie", "Rose", "Ardo", "Alma", "Norbert", "Jennie", "Barvin", "Tilly", "Pike", "Lydia", "Marlow", "Astrid", "Jasper"]);
-const halforcNames = () => randSelect(["Vara", "Gralk", "Ranna", "Korv", "Zasha", "Hrogar", "Klara", "Tragan", "Brolga", "Drago", "Yelena", "Krull", "Ulara", "Tulk", "Shiraal", "Wulf", "Ivara", "Hirok", "Aja", "Zoraan"]);
-const humanNames = () => randSelect(["Zali", "Bram", "Clara", "Nattias", "Rina", "Denton", "Mirena", "Aran", "Morgan", "Giralt", "Tamra", "Oscar", "Ishana", "Rogar", "Jasmin", "Tarin", "Yuri", "Malchor", "Lienna", "Godfrey"]);
+const halforcNames  = () => randSelect(["Vara", "Gralk", "Ranna", "Korv", "Zasha", "Hrogar", "Klara", "Tragan", "Brolga", "Drago", "Yelena", "Krull", "Ulara", "Tulk", "Shiraal", "Wulf", "Ivara", "Hirok", "Aja", "Zoraan"]);
+const humanNames    = () => randSelect(["Zali", "Bram", "Clara", "Nattias", "Rina", "Denton", "Mirena", "Aran", "Morgan", "Giralt", "Tamra", "Oscar", "Ishana", "Rogar", "Jasmin", "Tarin", "Yuri", "Malchor", "Lienna", "Godfrey"]);
 //Species p16
 //Languages p32
 const race = () => {
@@ -186,8 +186,6 @@ const race = () => {
 		default:
 			return selectWithRemainder(raceList, ele => ele.name == "Goblin").chosen;
 	}
-
-	return randSelect(raceList);
 }
 
 //Background p26
@@ -229,8 +227,13 @@ const statline = () => {
 }
 
 //Alignment p27
-const alignment = () => {
-	return randSelect(["Lawful", "Neutral", "Chaotic"]);
+const alignment = {
+	lawful: "Lawful",
+	neutral: "Neutral",
+	chaotic: "Chaotic",
+};
+const randAlignment = () => {
+	return randSelect([alignment.lawful, alignment.neutral, alignment.chaotic]);
 }
 
 //Random Characters p40
@@ -239,13 +242,14 @@ const makeChar = () => {
 	
 	return {
 		name: chosenRace.charNameFunc(),
-		alignment: alignment(),
+		alignment: randAlignment(),
 		race: chosenRace,
 		languages: chosenRace.languageListFunc(),
 		background: background(),
 		stats: statline(),
 	};
 }
+
 //TODO: have rollable list for rare languages and common languages
 //TODO: have rollable list for all gods, or gods by alignment
 
@@ -273,18 +277,18 @@ const update = (domID, val) => {
 }
 
 const refreshChar = () => {
-	const renderStat = (statNum) => `${statNum} (${statNum > 9 ? '+' : ''}${Math.floor((-10 + statNum)/2)})`
+	const renderStat = (statNum)  => `${statNum} (${statNum > 9 ? '+' : ''}${Math.floor((-10 + statNum)/2)})`
 	const renderLang = (language) => `<strong>${language.name}</strong>: Spoken by ${language.speakers}`
 
 	document.getElementById("reroll.stats").disabled = false;
-	if (Object.values(currentChar.stats).map(e => e>=14).includes(true))
+	if (Object.values(currentChar.stats).map(e => e >= 14).includes(true))
 	document.getElementById("reroll.stats").disabled = true;
 
 	document.getElementById("reroll.languages").disabled = currentChar.race.name !== "Human";
 
-	update("char.name", currentChar.name);
-	update("char.alignment", currentChar.alignment);
-	update("char.race", currentChar.race.name);
+	update("char.name",       currentChar.name);
+	update("char.alignment",  currentChar.alignment);
+	update("char.race",       currentChar.race.name);
 	update("char.trait.name", currentChar.race.talent.name);
 	update("char.trait.desc", currentChar.race.talent.description);
 
