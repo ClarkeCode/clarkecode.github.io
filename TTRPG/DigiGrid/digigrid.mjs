@@ -1,16 +1,31 @@
 /**
- * @typedef Tool
- * @property {string} name
- * @property {boolean} active
- * @property {{
- * 	mousedown?: (event: MouseEvent) => {}
- * 	mouseup?: 	(event: MouseEvent) => {}
- * 	keydown?: 	(event: KeyboardEvent) => {}
- * 	keyup?:   	(event: KeyboardEvent) => {}
- * }} eventHandlers
+ * @typedef ToolEventHandlers
+ * @property {(event: MouseEvent) => {}} [mousedown]
+ * @property {(event: MouseEvent) => {}} [mouseup]
+ * @property {(event: KeyboardEvent) => {}} [keydown]
+ * @property {(event: KeyboardEvent) => {}} [keyup]
+ */
+
+/**
+ * @typedef DefaultTool
+ * @property {{name: string, active: boolean}} defaultState
+ * @property {ToolEventHandlers} eventHandlers
  * @property {() => {}} drawTool
  */
 
+/**
+ * @typedef Tool
+ * @property {string} name
+ * @property {boolean} active
+ * @property {ToolEventHandlers} eventHandlers
+ * @property {() => {}} drawTool
+ */
+
+/**
+ * @typedef Shape
+ * @property {"line"|"rect"} type Currently either "line" or "rect"
+ * @property {Coord[]} vertices
+ */
 
 /**
  * @typedef {Object} Coord
@@ -68,7 +83,6 @@ const mouseButtonsPressed = (event) => {
  * @param {Rect} rect 
  */
 const isPointInRect = (point, rect) => {
-	console.log("TT", point, rect)
 	return (
 		isWithin(rect.x, point.x, rect.x + rect.w) &&
 		isWithin(rect.y, point.y, rect.y + rect.h)
@@ -90,13 +104,31 @@ const isIntersectingRects = (r1, r2) => {
 }
 
 
-//TODO: cutting lots of shapes is slow after a while, why?
-// Perhaps giving a bounding box so we can quickly dismiss shapes that are definately not intersected by the cutter?
 
 
-
-
-
+/*
+ ________________________
+|.----------------------.|
+||                      ||
+||       ______         ||
+||     .;;;;;;;;.       ||
+||    /;;;;;;;;;;;\     ||
+||   /;/`    `-;;;;; . .||
+||   |;|__  __  \;;;|   ||
+||.-.|;| e`/e`  |;;;|   ||
+||   |;|  |     |;;;|'--||
+||   |;|  '-    |;;;|   ||
+||   |;;\ --'  /|;;;|   ||
+||   |;;;;;---'\|;;;|   ||
+||   |;;;;|     |;;;|   ||
+||   |;;.-'     |;;;|   ||
+||'--|/`        |;;;|--.||
+||;;;;    .     ;;;;.\;;||
+||;;;;;-.;_    /.-;;;;;;||
+||;;;;;;;;;;;;;;;;;;;;;;||
+||jgs;;;;;;;;;;;;;;;;;;;||
+'------------------------'
+*/
 const canvas = document.getElementById("canvas-id");
 /**
  * @type {CanvasRenderingContext2D}
@@ -112,15 +144,15 @@ let mouse = {
 }
 let controller = {
 	cameraDragMode: false,
-	snapScale: 2,
+	snapScale: 1,
 }
 /**
- * @type {{type: string, vertices: Coord[]}[]}
+ * @type {Shape[]}
  */
 let shapes = [
 	{
 		type: "line",
-		vertices: [coord(10,10), coord(14,14), coord(18,10)]
+		vertices: [coord(5,10), coord(10,10), coord(14,14), coord(18,10), coord(20, 10)]
 	},
 	{
 		type: "line",
@@ -132,31 +164,47 @@ let shapes = [
 	},
 ];
 
-let verts = [];
-
-
-
-
-
-
-
 /** @type {Tool} */
-const draggerTool = {
-	name: "Dragger",
-	active: false,
-	startCoord: {x: 0, y: 0},
-	additive: true,
+let currentTool = {};
+
+/**
+ * The ENTIRE purpose of this function and the entire distinction of Tool vs DefaultTool w/ a 'defaultState' property is because
+ * structuredClone() chokes and dies when asked to copy a function...... serious language btw :/
+ * @param {DefaultTool} defaultTool 
+ */
+const selectTool = (defaultTool) => {
+	currentTool = structuredClone(defaultTool.defaultState);
+	currentTool.eventHandlers = defaultTool.eventHandlers;
+	currentTool.drawTool = defaultTool.drawTool;
+}
+
+
+/*
+ .----.                                .---.  
+'---,  `.____________________________.'  _  `.
+     )   ____________________________   <_>  :
+.---'  .'                            `.     .'
+ `----'                                `---'  
+*/
+
+/** @type {DefaultTool} */
+const squareTool = {
+	defaultState: {
+		name: "Square",
+		active: false,
+		startCoord: {x: 0, y: 0},
+	},
 
 	eventHandlers: {
 		mousedown: (event) => {
 			const mouseButtons = mouseButtonsPressed(event);
 			if (currentTool.active && mouseButtons.right) { //Right click while dragging should cancel as if user pressed "Escape"
-				currentTool.active = false;
+				selectTool(squareTool);
 				return;
 			}
 
 			currentTool.active = true;
-			currentTool.additive = !mouseButtons.right;
+		
 			currentTool.startCoord = snapToGrid(mouseToWorld());
 		},
 		mouseup: (event) => {
@@ -168,9 +216,8 @@ const draggerTool = {
 				h: Math.max(currentTool.startCoord.y, snapped.y) - Math.min(currentTool.startCoord.y, snapped.y),
 			};
 
-			//Additive
-			if (currentTool.active && currentTool.additive) {
-				console.log("ADD", dragRect);
+			//Finalize
+			if (currentTool.active) {
 				shapes.push({
 					type: "rect",
 					rect: dragRect,
@@ -182,58 +229,13 @@ const draggerTool = {
 						coord(dragRect.x, dragRect.y), //Close shape
 					]
 				})
+				selectTool(squareTool);
 			}
-
-			//Subtractive
-			else if (currentTool.active && !currentTool.additive) {
-				for (let shape of shapes) {
-					if (shape.type === "rect" && isIntersectingRects(shape.rect, dragRect)) {
-						console.log("COLLIDE", shape.rect);
-						shape.drawCustom = () => {
-							ctx.save();
-							ctx.moveTo(0,0);
-							console.log("DRAWC", shape.rect);
-							console.log("DRAWCV", shape.vertices);
-							ctx.fillStyle = "#FF880080";
-							ctx.fillRect(
-								visualScale * shape.rect.x, 
-								visualScale * shape.rect.y, 
-								visualScale * shape.rect.w, 
-								visualScale * shape.rect.h
-							);
-							ctx.restore();
-						}
-					}
-
-
-					let intersections = [];
-					for (const [v1, v2] of iterateListSlidingWindow(shape.vertices)) {
-						const res = lineIntersectionsWithRect(v1, v2, dragRect);
-						if (res.length > 0) {
-							intersections.push(...res);
-						}
-					}
-
-					//console.log("Shape Intersect", intersections);
-					verts.push(...intersections);
-
-					//console.log("SPLITSHAPE", splitShapeByRect(shape.vertices, dragRect));
-
-					//for (const v of shape.vertices) {
-					//	if (isPointInRect(v, dragRect)) {
-					//		verts.push(v);
-					//	}
-					//}
-				}
-				shapes = shapes.map(shape => splitShapeByRect(shape.vertices, dragRect)).flat();
-			}
-			currentTool.active = false
-			console.log(shapes);
 		},
 		keydown: (event) => {
-			console.log("E HANDLER");
 			if (event.code === "Escape") {
 				currentTool.active = false; //Discard anything in progress
+				selectTool(squareTool);
 			}
 		}
 	},
@@ -248,7 +250,7 @@ const draggerTool = {
 		};
 
 		ctx.save();
-		ctx.strokeStyle = currentTool.additive ? "#00AA00" : "#FF0000";
+		ctx.strokeStyle = "#00AA00";
 		ctx.strokeRect(
 			visualScale * dragRect.x,
 			visualScale * dragRect.y,
@@ -257,136 +259,243 @@ const draggerTool = {
 		);
 		ctx.restore();
 
-		ctx.font = "25px serif"
 		ctx.strokeText(`${dragRect.w * 10}x${dragRect.h * 10} ft`, mouse.x + 25, mouse.y + 25);
 	}
 }
 
-/** @type {Tool} */
+/** @type {DefaultTool} */
 const lineTool = {
-	name: "Line",
-	active: false,
-	
-	/** @type {Coord[]} */
-	lineCoords: [],
+	defaultState: {
+		name: "Line",
+		active: false,
+
+		modeAdditive: false,
+		/** @type {Coord[]} */
+		lineCoords: [],
+
+		modeSubtractive: false,
+		startCoord: {x: 0, y: 0},
+	},
 
 	eventHandlers: {
 		mousedown: (event) => {
 			const mouseButtons = mouseButtonsPressed(event);
 			const snapped = snapToGrid(mouseToWorld());
-			if (mouseButtons.any) {
-				currentTool.active = true;
+
+			//On initial press, go into additive or subtractive mode based on left/right click
+			if (!currentTool.active && mouseButtons.right) {
+				currentTool.name = "Line (Delete)";
+				currentTool.modeSubtractive = true;
+				currentTool.startCoord = snapped;
+				//console.log(currentTool)
+			}
+			else if (!currentTool.active && mouseButtons.any) {
+				currentTool.modeAdditive = true;
+				currentTool.name = "Line (Draw)";
+			}
+			currentTool.active = true;
+
+
+			//When in add-mode, drop a vertex when another button is pressed
+			if (currentTool.modeAdditive && mouseButtons.any) {
 				currentTool.lineCoords.push(snapped);
 			}
-			console.log(currentTool.lineCoords);
+
+			//Any other mousepress while in delete-mode should Discard anything in progress
+			if (currentTool.active && currentTool.modeSubtractive &&
+				(mouseButtons.left || mouseButtons.middle || mouseButtons.back || mouseButtons.forward)
+			) {
+				selectTool(lineTool);
+			}
 		},
 		mouseup: (event) => {
+			if (!currentTool.active) return;
+
 			const mouseButtons = mouseButtonsPressed(event);
 			const snapped = snapToGrid(mouseToWorld());
 			if (!mouseButtons.any) {
-				currentTool.active = false;
 				//Finalize
-				shapes.push({
-					type: "line",
-					vertices: [
-						...currentTool.lineCoords,
-						snapped
-					]
-				});
-				currentTool.lineCoords = [];
+				if (currentTool.modeAdditive) {
+					shapes.push({
+						type: "line",
+						vertices: [
+							...currentTool.lineCoords,
+							snapped
+						]
+					});
+				}
+				else {
+					//Delete line segments from any shape which intersects w/ the line
+
+					//If would delete a line segment, split the shape into 2 or more shapes
+					console.log(`Was ${shapes.length} shapes`);
+					shapes = shapes.map(shape => {
+						if (doLineIntersectShape(shape, currentTool.startCoord, snapped)) {
+							return splitShape(shape, currentTool.startCoord, snapped);
+						}
+						return shape;
+					}).flat();
+					console.log(`Now ${shapes.length} shapes`);
+				}
+				selectTool(lineTool);
 			}
 		},
 		keydown: (event) => {
 			if (event.code === "Escape") { //Discard anything in progress
-				currentTool.active = false;
-				currentTool.lineCoords = [];
+				selectTool(lineTool);
 			}
 		}
 	},
 	drawTool: () => {
 		const snapped = snapToGrid(mouseToWorld());
 		ctx.save();
-		ctx.strokeStyle = "#00AA00";
+		if (currentTool.modeAdditive) ctx.strokeStyle = "#00AA00";
+		else ctx.strokeStyle = "#AA0000";
 		ctx.beginPath();
-		console.log(currentTool.lineCoords);
-		console.log(iterateListSlidingWindow([...currentTool.lineCoords, snapped]));
-		for (const [v1, v2] of iterateListSlidingWindow([...currentTool.lineCoords, snapped])) {
-			ctx.moveTo(v1.x * visualScale, v1.y * visualScale);
-			ctx.lineTo(v2.x * visualScale, v2.y * visualScale);
+		if (currentTool.modeAdditive) {
+			for (const [v1, v2] of iterateListSlidingWindow([...currentTool.lineCoords, snapped])) {
+				ctx.moveTo(visualScale * v1.x, visualScale * v1.y);
+				ctx.lineTo(visualScale * v2.x, visualScale * v2.y);
+			}
+		}
+		else { //currentTool.modeSubtractive
+			ctx.moveTo(
+				visualScale * currentTool.startCoord.x,
+				visualScale * currentTool.startCoord.y
+			);
+			ctx.lineTo(
+				visualScale * snapped.x,
+				visualScale * snapped.y
+			);
 		}
 		ctx.stroke();
+
+
+		if (currentTool.modeSubtractive) {
+			ctx.lineWidth = 3;
+			ctx.lineCap = "round";
+			ctx.strokeStyle = "#aa4400";
+			ctx.beginPath();
+			//If would delete
+			for (const shape of shapes) {
+				for (const [v1, v2] of iterateListSlidingWindow(shape.vertices)) {
+					if (doLinesIntersect(v1, v2, currentTool.startCoord, snapped)){
+						ctx.moveTo(v1.x * visualScale, v1.y * visualScale);
+						ctx.lineTo(v2.x * visualScale, v2.y * visualScale);
+					}
+				}
+			}
+			ctx.stroke();
+		}
+		
 		ctx.restore();
 	}
 };
 
-let currentTool = draggerTool;
+//TODO: "ruler" tool for measuring distances. Maybe use manhattan distance? Or Euclidean distance rounded to nearest half-unit?
 
+/*
+                                  ____________________________  
+ _____                          ,\\    ___________________    \ 
+|     `------------------------'  ||  (___________________)   `|
+|_____.------------------------._ ||  ____________________     |
+                                `//__(____________________)___/ 
+*/
 
 
 /**
- * @param {Coord[]} vertices 
- * @param {Rect} eraseRect 
+ * 
+ * @param {Shape} shape where there is at least one intersection with the line
+ * @param {*} A 
+ * @param {*} B 
  */
-const splitShapeByRect = (vertices, eraseRect) => {
-	let output = [];
-	/** @type {Coord[]} */
-	let strip = [];
-	//debugger;
-	for (const [v1, v2] of iterateListSlidingWindow(vertices)) {
-		console.log("V", v1, v2);
-		const [within1, within2] = [
-			isPointInRect(v1, eraseRect),
-			isPointInRect(v2, eraseRect)
-		];
-		const intersections = lineIntersectionsWithRect(v1, v2, eraseRect);
+const splitShape = (shape, A, B) => {
+	let queue = iterateListSlidingWindow(shape.vertices);
 
-		//outside / outside
-		if (!within1 && !within2) {
-			//		-> line is totally outside rect, [v1, v2]
-			if (intersections.length == 0) {
-				strip.push(v1, v2);
-			}
-			//		-> line is intersected twice; finalize and start a new shape [v1, i1], [i2, v2]
-			else {
-				const [i1, i2] = intersections;
-				console.log("GGG", v1, v2);
-				console.log("III", intersections);
-
-				strip.push(v1, i1);
-				output.push(strip);
-				strip = [];
-
-				strip.push(i2, v2);
-			}
+	let multiVerts = [];
+	let vert = [queue.at(0)[0]];
+	for (const [index, v1v2] of queue.entries()) {
+		const [v1, v2] = v1v2;
+		if (doLinesIntersect(A, B, v1, v2)) { //Split
+			multiVerts.push(vert);
+			vert = [v2]
 		}
-		//outside / inside -> [v1, i1] //Finalize this new shape
-		else if (!within1 && within2) {
-			strip.push(v1, ...intersections);
-			output.push(strip);
-			strip = [];
+		else {
+			vert.push(v2);
 		}
-		//inside / outside -> [i1, v2] //Begin new shape
-		else if (within1 && !within2) {
-			strip.push(...intersections, v2);
-		}
-		//inside / inside -> line is totally within rect, ignore both
-		else {}
 	}
-	if (strip.length > 0) {
-		output.push(strip);
-	}
-	console.log("FINI", output.length);
-	return output.map(vertices => {
-		return {
-			type: "line",
-			vertices: vertices
+	multiVerts.push(vert);
+
+
+	return multiVerts.filter(
+		vertList => vertList.length >= 2 //If a split happened which leaves an orphaned vertex, remove it
+	).map(
+		vertList => {
+			return {type: "line", vertices: vertList}
 		}
-	});
+	);
 }
+
+/**
+ * 
+ * @param {Shape} shape 
+ * @param {*} A 
+ * @param {*} B 
+ */
+const doLineIntersectShape = (shape, A, B) => {
+	return iterateListSlidingWindow(shape.vertices).map(v1v2 => {
+		const [v1, v2] = v1v2;
+		return doLinesIntersect(A, B, v1, v2);
+	}).includes(true);
+}
+
+
+/**
+ * Returns true if points ABC are in Clockwise winding order
+ * @param {Coord} A 
+ * @param {Coord} B 
+ * @param {Coord} C 
+ */
+const isClockwise = (A, B, C) => {
+	return (C.y - A.y) * (B.x - A.x) < (C.x - A.x) * (B.y - A.y);
+}
+
+/**
+ * Test if line AB and line CD intersect
+ * @param {Coord} A 
+ * @param {Coord} B 
+ * @param {Coord} C 
+ * @param {Coord} D 
+ */
+const doLinesIntersect = (A, B, C, D) => {
+	return (
+		isClockwise(A, B, C) != isClockwise(A, B, D) &&
+		isClockwise(C, D, A) != isClockwise(C, D, B)
+	);
+}
+
 
 //////////////////////////
 //Main Interaction Hook //
 //////////////////////////
+/*    jgs
+       /
+      ()
+      ||
+      ||
+   __  \\
+  /  >   \\
+  ||` .-"||".
+   \\/  _//. `\
+    (  (-'  \  \
+     \  )   |  |
+      `"   /  /
+          /  /
+         |  (       _
+          \  `.-.-.'o`\
+           '.( ( ( .--'
+             `"`"'`
+*/
 {
 	window.addEventListener("keydown", (event) => {
 		if (!userInCanvas) return;
@@ -399,11 +508,11 @@ const splitShapeByRect = (vertices, eraseRect) => {
 			if (event.code == "KeyQ" && controller.snapScale > 1) {controller.snapScale /= 2;}
 			if (event.code == "KeyE" && controller.snapScale < 4) {controller.snapScale *= 2;}
 		}
-		else if (event.code == "Digit1" && currentTool.name !== draggerTool.name) {
-			currentTool = draggerTool;
+		else if (event.code == "Digit1" && currentTool.name !== squareTool.defaultState.name) {
+			selectTool(squareTool);
 		}
-		else if (event.code == "Digit2" && currentTool.name !== lineTool.name) {
-			currentTool = lineTool;
+		else if (event.code == "Digit2" && currentTool.name !== lineTool.defaultState.name) {
+			selectTool(lineTool);
 		}
 		if (currentTool.eventHandlers.keydown) {
 			currentTool.eventHandlers.keydown(event);
@@ -462,103 +571,7 @@ const splitShapeByRect = (vertices, eraseRect) => {
 	})
 }
 
-/**
- * 
- * @param {Coord} v1 
- * @param {Coord} v2 
- * @param {{x?: number, y?: number}} testPlane 
- */
-const lineCrossesPlane = (v1, v2, testPlane) => {
-	const slope = (v2.y - v1.y) / (v2.x - v1.x);
-	// y = mx + b
-	// y - b = mx
-	//-b = mx - y
-	// b = y - mx
-	const interceptX = v1.y - slope * v1.x;
-	// y = mx + b
-	// (y-b)/m = x
 
-
-	if (testPlane.x) {
-		const [lowX, highX] = [Math.min(v1.x, v2.x), Math.max(v1.x, v2.x)];
-		if (lowX < testPlane.x && testPlane.x < highX) {
-			return coord(testPlane.x, slope * testPlane.x + interceptX);
-		}
-		return undefined;
-	}
-}
-
-/**
- * 
- * @param {Coord} v1 
- * @param {Coord} v2 
- * @param {Rect} rect 
- */
-const lineIntersectionsWithRect = (v1, v2, rect) => {
-	const [lineXMin, lineXMax] = [Math.min(v1.x, v2.x), Math.max(v1.x, v2.x)];
-	const [lineYMin, lineYMax] = [Math.min(v1.y, v2.y), Math.max(v1.y, v2.y)];
-	//Special case: vertical line
-	if (v1.x === v2.x) {
-		if (isWithin(rect.x, v1.x, rect.x + rect.w)) {
-			//console.log("INTERSECT VERT LINE")
-			//Project line onto rectangle and keep coords if they are within the original line segment
-			return [
-				coord(v1.x, rect.y),
-				coord(v1.x, rect.y + rect.h)
-			].filter(coord => isWithin(
-				lineYMin, coord.y, lineYMax
-			));
-		}
-		return [];
-	}
-
-	//Special case: horizontal line
-	else if (v1.y === v2.y) {
-		if (isWithin(rect.y, v1.y, rect.y + rect.h)) {
-			//console.log("INTERSECT HORIZ LINE")
-			return [
-				coord(rect.x, v1.y),
-				coord(rect.x + rect.w, v1.y)
-			].filter(coord => isWithin(
-				lineXMin, coord.x, lineXMax
-			));
-		}
-		return [];
-	}
-
-	const slope = (v2.y - v1.y) / (v2.x - v1.x);
-	// y = mx + b
-	// y - b = mx
-	//-b = mx - y
-	// b = y - mx
-	const interceptX = v1.y - slope * v1.x;
-	// y = mx + b
-	// (y-b)/m = x
-
-	const yLine = (x) => slope * x + interceptX;   //y = mx + b
-	const xLine = (y) => (y - interceptX) / slope; //x = (y-b)/m
-	//console.log("INTERSECT SLOPE LINE")
-
-	const a = [
-		coord(rect.x, yLine(rect.x)),
-		coord(rect.x + rect.w, yLine(rect.x + rect.w)),
-		coord(xLine(rect.y), rect.y),
-		coord(xLine(rect.y + rect.h), rect.y + rect.h)
-	].filter(coord => {
-		return (
-			isWithin(lineXMin, coord.x, lineXMax) &&
-			isWithin(lineYMin, coord.y, lineYMax) &&
-			isWithin(rect.x, coord.x, rect.x + rect.w) &&
-			isWithin(rect.y, coord.y, rect.y + rect.h)
-		);
-	});
-
-	return a;
-}
-
-console.log(
-	lineCrossesPlane(coord(1,0), coord(3,1), {x: 2})
-)
 
 const mouseToWorld = () => {
 	return {
@@ -610,6 +623,43 @@ const iterateListSlidingWindow = (list, includeFirstNLast = false) => {
 	].filter(e => e);
 }
 
+
+
+
+
+
+
+
+
+/*
+            _
+           H||
+           H||
+ __________H||___________
+[|.......................|
+||.........## --.#.......|
+||.........   #  # ......|            @@@@
+||.........     *  ......|          @@@@@@@
+||........     -^........|   ,      - @@@@
+||.....##\        .......|   |     '_ @@@
+||....#####     /###.....|   |     __\@ \@
+||....########\ \((#.....|  _\\  (/ ) @\_/)____
+||..####,   ))/ ##.......|   |(__/ /     /|% #/
+||..#####      '####.....|    \___/ ----/_|-%/
+||..#####\____/#####.....|       ,:   '(
+||...######..######......|       |:     \
+||.....""""  """"...b'ger|       |:      )
+[|_______________________|       |:      |
+       H||_______H||             |_____,_|
+       H||________\|              |   / (
+       H||       H||              |  /\  )
+       H||       H||              (  \| /
+      _H||_______H||__            |  /'=.
+    H|________________|           '=>/  \
+                                 /  \ /|/
+                               ,___/|
+
+*/
 const drawShapes = () => {
 	ctx.save();
 	for (const shape of shapes) {
@@ -627,9 +677,7 @@ const drawShapes = () => {
 		//if (shape.type === "rect") isClosedShape = true;
 		//if (shape.type === "line") isClosedShape = false;
 
-		for (const [v1, v2] of iterateListSlidingWindow(shape.vertices//, isClosedShape
-
-		)) {
+		for (const [v1, v2] of iterateListSlidingWindow(shape.vertices)) {
 			ctx.moveTo(v1.x * visualScale, v1.y * visualScale);
 			ctx.lineTo(v2.x * visualScale, v2.y * visualScale);
 		}
@@ -654,51 +702,29 @@ const imposeGridHatching = () => {
 	ctx.restore();
 }
 
-
-
-
-
-
-
-
-
-const draw = () => {
-	ctx.save();
-	ctx.strokeStyle = "#000000";
-	ctx.fillStyle = "#DDDDDD";
-	ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-	ctx.restore();
-
-	imposeGridHatching();
-
-	drawShapes();
-
-	ctx.strokeStyle = "#000000";
-	ctx.fillStyle = "#CCCCCC";
-
-	ctx.save();
-	ctx.fillStyle = "#FF4444";
-	for (const v of verts) {
-		ctx.beginPath();
-		ctx.arc(v.x * visualScale, v.y * visualScale, 2.5, 0, Math.PI * 2);
-		ctx.fill();
-	}
-
-	ctx.restore();
-
-
-	//const comp = new Path2D();
-	//comp.rect(50, 50, 300, 100);
-	//comp.rect(100, 0, 100, 200);
-	//ctx.stroke(comp);
-
-
+const drawMouseIndicator = () => {
 	const snapped = snapToGrid(mouseToWorld())
 	ctx.beginPath();
 	ctx.arc(snapped.x * visualScale, snapped.y * visualScale, 2.5, 0, Math.PI * 2);
 	ctx.stroke();
+}
 
 
+
+const draw = () => {
+	{
+		ctx.font = "25px serif";
+		ctx.strokeStyle = "#000000";
+		ctx.fillStyle = "#DDDDDD";
+	}
+	ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+	imposeGridHatching();
+
+	drawShapes();
+	drawMouseIndicator();
+
+	//Tool
 	if (currentTool.active) {
 		currentTool.drawTool();
 	}
@@ -707,4 +733,14 @@ const draw = () => {
 	ctx.strokeText(`Snapscale: ${controller.snapScale * 5} ft`, 20, ctx.canvas.height - 5);
 }
 
+
+
+
+
+
+
+selectTool(lineTool);
 draw();
+
+
+
