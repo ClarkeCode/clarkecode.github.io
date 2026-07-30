@@ -135,12 +135,19 @@ const canvas = document.getElementById("canvas-id");
  */
 const ctx = canvas.getContext("2d");
 
+const MILLISECONDS_PER_SECOND = 1000;
+let lastFrametime = performance.now();
+
+
 let visualScale = 25;
 let userInCanvas = false;
 
 let mouse = {
 	x: 0,
 	y: 0,
+}
+let keyboard = {
+	pressedKeys: []
 }
 let controller = {
 	cameraDragMode: false,
@@ -163,6 +170,12 @@ let shapes = [
 		vertices: [coord(15,2), coord(15,8)]
 	},
 ];
+
+let camera = {
+	x: 0.0,
+	y: 0.0,
+	zoom: 1.0,
+}
 
 /** @type {Tool} */
 let currentTool = {};
@@ -499,6 +512,13 @@ const doLinesIntersect = (A, B, C, D) => {
 {
 	window.addEventListener("keydown", (event) => {
 		if (!userInCanvas) return;
+
+		if (!keyboard.pressedKeys.includes(event.code)) {
+			keyboard.pressedKeys.push(event.code);
+		}
+
+		if (event.code == "KeyR") camera.zoom *= 2;
+		if (event.code == "KeyF") camera.zoom /= 2;
 		//console.log(`KY: ${event.key}`, typeof(event.key), event.code)
 		if (event.code == "Space") {
 			controller.cameraDragMode = true;
@@ -522,6 +542,7 @@ const doLinesIntersect = (A, B, C, D) => {
 
 	window.addEventListener("keyup", (event) => {
 		if (!userInCanvas) return;
+		keyboard.pressedKeys = keyboard.pressedKeys.filter(ele => ele != event.code);
 		//console.log(`KY: ${event.key}`, typeof(event.key), event.code)
 		if (event.code == "Space") {
 			controller.cameraDragMode = false;
@@ -717,8 +738,12 @@ const draw = () => {
 		ctx.strokeStyle = "#000000";
 		ctx.fillStyle = "#DDDDDD";
 	}
+	ctx.save();
+	ctx.resetTransform();
 	ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+	ctx.restore();
 
+	applyCamera();
 	imposeGridHatching();
 
 	drawShapes();
@@ -729,18 +754,56 @@ const draw = () => {
 		currentTool.drawTool();
 	}
 
+	const ttt = canvas.getBoundingClientRect()
+	//ctx.strokeText(`Tool: ${currentTool.name}`, 20, ctx.canvas.height - 35);
 	ctx.strokeText(`Tool: ${currentTool.name}`, 20, ctx.canvas.height - 35);
+	//ctx.strokeText(`Snapscale: ${controller.snapScale * 5} ft`, 20, ctx.canvas.height - 5);
 	ctx.strokeText(`Snapscale: ${controller.snapScale * 5} ft`, 20, ctx.canvas.height - 5);
 }
 
 
+const applyCamera = () => {
+	const [viewportWidth, viewportHeight] = [ctx.canvas.width, ctx.canvas.height];
+	ctx.setTransform(
+		camera.zoom, 0,
+		0, camera.zoom,
+		(-camera.x * camera.zoom + viewportWidth/2),
+		(camera.y * camera.zoom + viewportHeight/2)
+	);
+}
 
 
+
+/**
+ * @param {number} deltaTime Time since last frame in seconds
+ */
+const update = (deltaTime) => {
+	const speed = 100 / camera.zoom;
+	if (keyboard.pressedKeys.includes("KeyD")) camera.x += speed * deltaTime;
+	if (keyboard.pressedKeys.includes("KeyA")) camera.x -= speed * deltaTime;
+	if (keyboard.pressedKeys.includes("KeyW")) camera.y += speed * deltaTime;
+	if (keyboard.pressedKeys.includes("KeyS")) camera.y -= speed * deltaTime;
+}
+
+
+/**
+ * 
+ * @param {DOMHighResTimeStamp} currentFrametime 
+ */
+const processFrame = (currentFrametime) => {
+	const deltaTime = (currentFrametime - lastFrametime) / MILLISECONDS_PER_SECOND;
+	lastFrametime = currentFrametime;
+
+	update(deltaTime);
+	draw(); //AKA render
+
+	requestAnimationFrame(processFrame);
+}
 
 
 
 selectTool(lineTool);
-draw();
+requestAnimationFrame(processFrame);
 
 
 
