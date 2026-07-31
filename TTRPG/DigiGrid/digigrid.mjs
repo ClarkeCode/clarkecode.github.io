@@ -172,8 +172,8 @@ let shapes = [
 ];
 
 let camera = {
-	x: 0.0,
-	y: 0.0,
+	x: 750.0,
+	y: -400.0,
 	zoom: 1.0,
 }
 
@@ -711,11 +711,11 @@ const imposeGridHatching = () => {
 	ctx.save();
 	ctx.strokeStyle = "#3AA1A580"
 	ctx.beginPath()
-	for (let y = 0; y < 20; y++) {
+	for (let y = 0; y < 40; y++) {
 		ctx.moveTo(-10, y * visualScale);
 		ctx.lineTo(ctx.canvas.width+10, y * visualScale);
 	}
-	for (let x = 0; x < 20; x++) {
+	for (let x = 0; x < 80; x++) {
 		ctx.moveTo(x * visualScale, -10);
 		ctx.lineTo(x * visualScale, ctx.canvas.height+10);
 	}
@@ -778,6 +778,7 @@ const applyCamera = () => {
  * @param {number} deltaTime Time since last frame in seconds
  */
 const update = (deltaTime) => {
+	if (!userInCanvas) return;
 	const speed = 100 / camera.zoom;
 	if (keyboard.pressedKeys.includes("KeyD")) camera.x += speed * deltaTime;
 	if (keyboard.pressedKeys.includes("KeyA")) camera.x -= speed * deltaTime;
