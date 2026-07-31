@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8">
+		<title>DigiGrid</title>
+		<style>
+			body {
+				background-color: gray;
+			}
+			canvas {
+				border: 1px solid black;
+				background-color: #DDDDDD;
+			}
+		</style>
+	</head>
+	<body>
+		<canvas id="canvas-id"
+			width="1500"
+			height="800"
+			oncontextmenu="event.preventDefault()" <!-- Don't open a right-click menu when clicking inside canvas -->
+			tabindex="1" <!-- Make canvas focusable for keyboard input -->
+		></canvas>
+		<script src="digigrid.mjs"></script>
+
+		<br>
+		<a
+		onclick="()=>console.log('Clicked')"
+		>Download Map</a>
+	</body>
+</html>
