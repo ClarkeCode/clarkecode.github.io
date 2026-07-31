@@ -23,7 +23,8 @@
 
 /**
  * @typedef Shape
- * @property {"line"|"rect"} type Currently either "line" or "rect"
+ * @property {"line"|"rect"|"door"} type Currently either "line" or "rect" or "door"
+ * @property {string} [subtype]
  * @property {Coord[]} vertices
  */
 
@@ -70,11 +71,18 @@ const isWithin = (low, test, high) => {
 const mouseButtonsPressed = (event) => {
 	return {
 		any:     event.buttons > 0,
-		left:    event.buttons & 1,
-		right:   event.buttons & 2,
-		middle:  event.buttons & 4,
-		back:    event.buttons & 8,
-		forward: event.buttons & 16
+		left:    event.buttons &  1,
+		right:   event.buttons &  2,
+		middle:  event.buttons &  4,
+		back:    event.buttons &  8,
+		forward: event.buttons & 16,
+		numPressed: [
+			event.buttons &  1,
+			event.buttons &  2,
+			event.buttons &  4,
+			event.buttons &  8,
+			event.buttons & 16,
+		].filter(Boolean).length
 	}
 }
 
@@ -293,14 +301,17 @@ const lineTool = {
 	eventHandlers: {
 		mousedown: (event) => {
 			const mouseButtons = mouseButtonsPressed(event);
-			const snapped = snapToGrid(mouseToWorld());
+			const worldPos = mouseToWorld();
+			const snapped = snapToGrid(worldPos);
 
+			console.log("START", currentTool);
+
+			console.log("MB", mouseButtons)
 			//On initial press, go into additive or subtractive mode based on left/right click
 			if (!currentTool.active && mouseButtons.right) {
 				currentTool.name = "Line (Delete)";
 				currentTool.modeSubtractive = true;
-				currentTool.startCoord = snapped;
-				//console.log(currentTool)
+				currentTool.startCoord = worldPos;
 			}
 			else if (!currentTool.active && mouseButtons.any) {
 				currentTool.modeAdditive = true;
@@ -308,16 +319,15 @@ const lineTool = {
 			}
 			currentTool.active = true;
 
+			console.log(currentTool);
 
-			//When in add-mode, drop a vertex when another button is pressed
+			//When in add-mode, drop a vertex when a button is pressed
 			if (currentTool.modeAdditive && mouseButtons.any) {
 				currentTool.lineCoords.push(snapped);
 			}
 
 			//Any other mousepress while in delete-mode should Discard anything in progress
-			if (currentTool.active && currentTool.modeSubtractive &&
-				(mouseButtons.left || mouseButtons.middle || mouseButtons.back || mouseButtons.forward)
-			) {
+			if (currentTool.active && currentTool.modeSubtractive && mouseButtons.numPressed > 1) {
 				selectTool(lineTool);
 			}
 		},
@@ -325,7 +335,7 @@ const lineTool = {
 			if (!currentTool.active) return;
 
 			const mouseButtons = mouseButtonsPressed(event);
-			const snapped = snapToGrid(mouseToWorld());
+			const endCoord = (currentTool.modeAdditive) ? snapToGrid(mouseToWorld()) : mouseToWorld();
 			if (!mouseButtons.any) {
 				//Finalize
 				if (currentTool.modeAdditive) {
@@ -333,7 +343,7 @@ const lineTool = {
 						type: "line",
 						vertices: [
 							...currentTool.lineCoords,
-							snapped
+							endCoord
 						]
 					});
 				}
@@ -343,8 +353,8 @@ const lineTool = {
 					//If would delete a line segment, split the shape into 2 or more shapes
 					console.log(`Was ${shapes.length} shapes`);
 					shapes = shapes.map(shape => {
-						if (doLineIntersectShape(shape, currentTool.startCoord, snapped)) {
-							return splitShape(shape, currentTool.startCoord, snapped);
+						if (doLineIntersectShape(shape, currentTool.startCoord, endCoord)) {
+							return splitShape(shape, currentTool.startCoord, endCoord);
 						}
 						return shape;
 					}).flat();
@@ -360,13 +370,13 @@ const lineTool = {
 		}
 	},
 	drawTool: () => {
-		const snapped = snapToGrid(mouseToWorld());
+		const endCoord = (currentTool.modeAdditive) ? snapToGrid(mouseToWorld()) : mouseToWorld();
 		ctx.save();
 		if (currentTool.modeAdditive) ctx.strokeStyle = "#00AA00";
 		else ctx.strokeStyle = "#AA0000";
 		ctx.beginPath();
 		if (currentTool.modeAdditive) {
-			for (const [v1, v2] of iterateListSlidingWindow([...currentTool.lineCoords, snapped])) {
+			for (const [v1, v2] of iterateListSlidingWindow([...currentTool.lineCoords, endCoord])) {
 				ctx.moveTo(visualScale * v1.x, visualScale * v1.y);
 				ctx.lineTo(visualScale * v2.x, visualScale * v2.y);
 			}
@@ -377,8 +387,8 @@ const lineTool = {
 				visualScale * currentTool.startCoord.y
 			);
 			ctx.lineTo(
-				visualScale * snapped.x,
-				visualScale * snapped.y
+				visualScale * endCoord.x,
+				visualScale * endCoord.y
 			);
 		}
 		ctx.stroke();
@@ -392,7 +402,7 @@ const lineTool = {
 			//If would delete
 			for (const shape of shapes) {
 				for (const [v1, v2] of iterateListSlidingWindow(shape.vertices)) {
-					if (doLinesIntersect(v1, v2, currentTool.startCoord, snapped)){
+					if (doLinesIntersect(v1, v2, currentTool.startCoord, endCoord)){
 						ctx.moveTo(v1.x * visualScale, v1.y * visualScale);
 						ctx.lineTo(v2.x * visualScale, v2.y * visualScale);
 					}
@@ -401,6 +411,76 @@ const lineTool = {
 			ctx.stroke();
 		}
 		
+		ctx.restore();
+	}
+};
+
+/** @type {DefaultTool} */
+const doorTool = {
+	defaultState: {
+		name: "Door",
+		active: false,
+
+		/** @type {Coord} */
+		startCoord: {x: 0, y: 0},
+	},
+
+	eventHandlers: {
+		mousedown: (event) => {
+			const mouseButtons = mouseButtonsPressed(event);
+			console.log(mouseButtons);
+			const worldPos = mouseToWorld();
+			const snapped = snapToGrid(worldPos);
+
+			//On initial press, store initial coordinate and exit early
+			if (!currentTool.active) {
+				currentTool.active = true;
+				currentTool.startCoord = snapped;
+				return;
+			}
+
+			//Discard if there are more than one button pressed
+			if (mouseButtons.numPressed > 1) {
+				selectTool(doorTool);
+			}
+		},
+		mouseup: (event) => {
+			if (!currentTool.active) return;
+
+			const mouseButtons = mouseButtonsPressed(event);
+			const endCoord = snapToGrid(mouseToWorld());
+
+			if (!mouseButtons.any) {	
+				shapes.push({
+					type: "door",
+					subtype: "door-standard",
+					vertices: [currentTool.startCoord, endCoord]
+				});
+				selectTool(doorTool);
+			}
+		},
+		keydown: (event) => {
+			if (event.code === "Escape") { //Discard anything in progress
+				selectTool(doorTool);
+			}
+		}
+	},
+	drawTool: () => {
+		const endCoord = snapToGrid(mouseToWorld());
+		ctx.save();
+
+		ctx.strokeStyle = "#00AA88";
+		ctx.beginPath();
+		ctx.moveTo(
+			visualScale * currentTool.startCoord.x,
+			visualScale * currentTool.startCoord.y
+		);
+		ctx.lineTo(
+			visualScale * endCoord.x,
+			visualScale * endCoord.y
+		);
+		ctx.stroke();
+
 		ctx.restore();
 	}
 };
@@ -533,6 +613,9 @@ const doLinesIntersect = (A, B, C, D) => {
 		}
 		else if (event.code == "Digit2" && currentTool.name !== lineTool.defaultState.name) {
 			selectTool(lineTool);
+		}
+		else if (event.code == "Digit3" && currentTool.name !== doorTool.defaultState.name) {
+			selectTool(doorTool);
 		}
 		if (currentTool.eventHandlers.keydown) {
 			currentTool.eventHandlers.keydown(event);
@@ -694,9 +777,19 @@ const drawShapes = () => {
 	ctx.fillStyle = "#DDDDDD";
 	ctx.beginPath();
 	for (const shape of shapes) {
-		//let isClosedShape = false;
-		//if (shape.type === "rect") isClosedShape = true;
-		//if (shape.type === "line") isClosedShape = false;
+		
+		if (shape.type === "door") {
+			const [v1, v2] = shape.vertices;
+			ctx.moveTo(v1.x * visualScale, v1.y * visualScale);
+			ctx.lineTo(v2.x * visualScale, v2.y * visualScale);
+
+			ctx.moveTo((v1.x + 0.5) * visualScale, (v1.y + 0.5) * visualScale);
+			ctx.lineTo((v2.x + 0.5) * visualScale, (v2.y + 0.5) * visualScale);
+
+			ctx.moveTo((v1.x - 0.5) * visualScale, (v1.y - 0.5) * visualScale);
+			ctx.lineTo((v2.x - 0.5) * visualScale, (v2.y - 0.5) * visualScale);
+			continue;
+		}
 
 		for (const [v1, v2] of iterateListSlidingWindow(shape.vertices)) {
 			ctx.moveTo(v1.x * visualScale, v1.y * visualScale);
@@ -803,8 +896,78 @@ const processFrame = (currentFrametime) => {
 
 
 
+
+const CURRENT_DATA_VERSION = 1;
+const getStateForSaving = () => {
+	return {
+		dataVersion: CURRENT_DATA_VERSION,
+		shapes: shapes,
+	}
+}
+/**
+ * 
+ * @param {{dataVersion: number}} obj 
+ */
+const loadStateFromObject = (obj) => {
+	console.log(`Loading data-version: ${obj.dataVersion}`);
+	if (obj.dataVersion > CURRENT_DATA_VERSION) {
+		console.error(`Cannot Load: file data version is ${obj.dataVersion}, latest is ${CURRENT_DATA_VERSION}`);
+		return;
+	}
+	if (obj.dataVersion < CURRENT_DATA_VERSION) {
+		//PERFORM MIGRATION
+	}
+
+	
+	shapes = obj.shapes;
+	console.log(`Loaded ${shapes.length} shapes`);
+}
+
+const downloadMap = () => {
+	const url = URL.createObjectURL(
+		new Blob([JSON.stringify(getStateForSaving(), null, '\t')], {type: "application/json"}
+	));
+
+	const link = document.createElement("a");
+	link.setAttribute("href", url);
+	link.setAttribute("download", "mymap.json");
+	link.click();
+
+	document.body.removeChild(link);
+	URL.revokeObjectURL(link);
+}
+
+document.getElementById("fileInput").addEventListener("change", (event) => {
+	if (!(event.target.files) || event.target.files.length < 1) return;
+	const file = event.target.files[0];
+
+	const reader = new FileReader();
+	reader.onload = (e) => {
+		try {
+			const result = JSON.parse(e.target.result);
+			loadStateFromObject(result);
+		}
+		catch (err) {
+			console.error(`Invalid JSON format:`, err)
+		}
+	}
+	reader.readAsText(file);
+})
+
+
+
+
+
+
 selectTool(lineTool);
 requestAnimationFrame(processFrame);
+
+
+
+
+
+
+
 
 
 
