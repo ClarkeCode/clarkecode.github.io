@@ -15,16 +15,26 @@
 	</head>
 	<body>
 		<canvas id="canvas-id"
-			width="1500"
+			width="1000"
 			height="800"
 			oncontextmenu="event.preventDefault()" <!-- Don't open a right-click menu when clicking inside canvas -->
 			tabindex="1" <!-- Make canvas focusable for keyboard input -->
 		></canvas>
-		<script src="digigrid.mjs"></script>
+		<script src="digigrid.mjs" defer></script>
 
 		<br>
-		<a
-		onclick="()=>console.log('Clicked')"
-		>Download Map</a>
+		<!--<a
+			href="javascript:void(0);"
+			onclick="console.log('Clicked 2')"
+		>Download Map</a>-->
+
+		<button onclick="downloadMap()">
+			Download Map
+		</button>
+		<input
+			type="file"
+			id="fileInput"
+			accept=".json"
+		/>
 	</body>
 </html>

@@ -23,15 +23,36 @@
 
 /**
  * @typedef Shape
- * @property {"line"|"rect"} type Currently either "line" or "rect"
+ * @property {"line"|"rect"|"door"} type Currently either "line" or "rect" or "door"
+ * @property {string} [subtype]
  * @property {Coord[]} vertices
  */
 
 /**
+ * An XY coordinate in cartesian space
  * @typedef {Object} Coord
  * @property {number} x
  * @property {number} y
  */
+
+/**
+ * Magnitude
+ * @typedef {Object} Vector
+ * @property {number} x
+ * @property {number} y
+ */
+
+/** @param {number} x @param {number} y @returns {Vector} */
+const vector = (x, y) => { return {x: x, y: y}; };
+
+/**
+ * A line segment defined by two coordinates in cartesian space
+ * @typedef {Object} Segment
+ * @property {Coord} p1
+ * @property {Coord} p2
+ */
+/** @param {Coord} p1 @param {Coord} p2 @returns {Segment} */
+const segment = (p1, p2) => { return {p1: p1, p2: p2}; };
 
 /**
  * Assume x and y are the minimum of vertices (closest to origin)
@@ -47,9 +68,8 @@
  * @param {number} y 
  * @returns {Coord}
  */
-const coord = (x, y) => {
-	return {x: x, y: y};
-};
+const coord = (x, y) => { return {x: x, y: y}; };
+
 
 /**
  * Return true if `low <= test <= high`, false otherwise
@@ -70,11 +90,18 @@ const isWithin = (low, test, high) => {
 const mouseButtonsPressed = (event) => {
 	return {
 		any:     event.buttons > 0,
-		left:    event.buttons & 1,
-		right:   event.buttons & 2,
-		middle:  event.buttons & 4,
-		back:    event.buttons & 8,
-		forward: event.buttons & 16
+		left:    event.buttons &  1,
+		right:   event.buttons &  2,
+		middle:  event.buttons &  4,
+		back:    event.buttons &  8,
+		forward: event.buttons & 16,
+		numPressed: [
+			event.buttons &  1,
+			event.buttons &  2,
+			event.buttons &  4,
+			event.buttons &  8,
+			event.buttons & 16,
+		].filter(Boolean).length
 	}
 }
 
@@ -130,9 +157,7 @@ const isIntersectingRects = (r1, r2) => {
 '------------------------'
 */
 const canvas = document.getElementById("canvas-id");
-/**
- * @type {CanvasRenderingContext2D}
- */
+/** @type {CanvasRenderingContext2D}  */
 const ctx = canvas.getContext("2d");
 
 const MILLISECONDS_PER_SECOND = 1000;
@@ -153,10 +178,71 @@ let controller = {
 	cameraDragMode: false,
 	snapScale: 1,
 }
+const MIN_SNAP = 0.5;
+const MAX_SNAP = 2;
+const increaseGridSnap = () => {
+	if (controller.snapScale < MAX_SNAP) controller.snapScale *= 2;
+}
+const decreaseGridSnap = () => {
+	if (controller.snapScale > MIN_SNAP) controller.snapScale /= 2;
+}
+
+
+let camera = {
+	x: 0.0,
+	y: 0.0,
+
+	baseWidth: 40,
+	baseHeight: 30,
+	zoomFactor: 1.0,
+}
+const increaseZoom = () => camera.zoomFactor += 0.25;
+const decreaseZoom = () => {if (camera.zoomFactor > 0.25) camera.zoomFactor -= 0.25};
+
+/** Visible area as a World-space rectangle @returns {Rect} */
+const cameraAsRect = () => {
+	return {
+		x: camera.x - (camera.baseWidth / camera.zoomFactor) / 2,
+		y: camera.y + (camera.baseHeight / camera.zoomFactor) / 2,
+		w: (camera.baseWidth  / camera.zoomFactor),
+		h: (camera.baseHeight / camera.zoomFactor)
+	};
+}
+
+/** @param {Coord} point Worldspace location @returns {Coord} Screenspace location */
+const worldToScreen = (point) => {
+	const cam = cameraAsRect();
+	const [screenWidth, screenHeight] = [ctx.canvas.width, ctx.canvas.height];
+
+	return coord(
+		(point.x - cam.x) * (screenWidth / cam.w),
+		-(point.y - cam.y) * (screenHeight / cam.h)
+	);
+}
+
+/** @param {Coord} point Screenspace location @returns {Coord} Worldspace location */
+const screenToWorld = (point) => {
+	const cam = cameraAsRect();
+	const [screenWidth, screenHeight] = [ctx.canvas.width, ctx.canvas.height];
+
+	return coord(
+		point.x * (cam.w / screenWidth) + cam.x,
+		cam.y - point.y * (cam.h / screenHeight)
+	);
+}
+
+
+const mouseToWorld = () => screenToWorld(coord(mouse.x, mouse.y));
+
+
 /**
  * @type {Shape[]}
  */
 let shapes = [
+	{
+		type: "line",
+		vertices: [coord(1,1), coord(2,2), coord(3,1), coord(3,3), coord(5, 3)]
+	},
 	{
 		type: "line",
 		vertices: [coord(5,10), coord(10,10), coord(14,14), coord(18,10), coord(20, 10)]
@@ -171,11 +257,7 @@ let shapes = [
 	},
 ];
 
-let camera = {
-	x: 750.0,
-	y: -400.0,
-	zoom: 1.0,
-}
+
 
 /** @type {Tool} */
 let currentTool = {};
@@ -200,6 +282,7 @@ const selectTool = (defaultTool) => {
  `----'                                `---'  
 */
 
+//TODO: something is still wrong with the drawing
 /** @type {DefaultTool} */
 const squareTool = {
 	defaultState: {
@@ -261,15 +344,23 @@ const squareTool = {
 			w: Math.max(currentTool.startCoord.x, snapped.x) - Math.min(currentTool.startCoord.x, snapped.x),
 			h: Math.max(currentTool.startCoord.y, snapped.y) - Math.min(currentTool.startCoord.y, snapped.y),
 		};
+		const verts = [
+			coord(dragRect.x, dragRect.y),
+			coord(dragRect.x + dragRect.w, dragRect.y),
+			coord(dragRect.x + dragRect.w, dragRect.y + dragRect.h),
+			coord(dragRect.x, dragRect.y + dragRect.h),
+			coord(dragRect.x, dragRect.y), //Close shape
+		]
 
 		ctx.save();
 		ctx.strokeStyle = "#00AA00";
-		ctx.strokeRect(
-			visualScale * dragRect.x,
-			visualScale * dragRect.y,
-			visualScale * dragRect.w,
-			visualScale * dragRect.h,
-		);
+		ctx.beginPath();
+		for (const [v1, v2] of iterateListSlidingWindow(verts)) {
+			const [sc1, sc2] = [worldToScreen(v1), worldToScreen(v2)];
+			ctx.moveTo(sc1.x, sc1.y);
+			ctx.lineTo(sc2.x, sc2.y);
+		}
+		ctx.stroke();
 		ctx.restore();
 
 		ctx.strokeText(`${dragRect.w * 10}x${dragRect.h * 10} ft`, mouse.x + 25, mouse.y + 25);
@@ -293,14 +384,14 @@ const lineTool = {
 	eventHandlers: {
 		mousedown: (event) => {
 			const mouseButtons = mouseButtonsPressed(event);
-			const snapped = snapToGrid(mouseToWorld());
+			const worldPos = mouseToWorld();
+			const snapped = snapToGrid(worldPos);
 
 			//On initial press, go into additive or subtractive mode based on left/right click
 			if (!currentTool.active && mouseButtons.right) {
 				currentTool.name = "Line (Delete)";
 				currentTool.modeSubtractive = true;
-				currentTool.startCoord = snapped;
-				//console.log(currentTool)
+				currentTool.startCoord = worldPos;
 			}
 			else if (!currentTool.active && mouseButtons.any) {
 				currentTool.modeAdditive = true;
@@ -308,16 +399,13 @@ const lineTool = {
 			}
 			currentTool.active = true;
 
-
-			//When in add-mode, drop a vertex when another button is pressed
+			//When in add-mode, drop a vertex when a button is pressed
 			if (currentTool.modeAdditive && mouseButtons.any) {
 				currentTool.lineCoords.push(snapped);
 			}
 
 			//Any other mousepress while in delete-mode should Discard anything in progress
-			if (currentTool.active && currentTool.modeSubtractive &&
-				(mouseButtons.left || mouseButtons.middle || mouseButtons.back || mouseButtons.forward)
-			) {
+			if (currentTool.active && currentTool.modeSubtractive && mouseButtons.numPressed > 1) {
 				selectTool(lineTool);
 			}
 		},
@@ -325,7 +413,7 @@ const lineTool = {
 			if (!currentTool.active) return;
 
 			const mouseButtons = mouseButtonsPressed(event);
-			const snapped = snapToGrid(mouseToWorld());
+			const endCoord = (currentTool.modeAdditive) ? snapToGrid(mouseToWorld()) : mouseToWorld();
 			if (!mouseButtons.any) {
 				//Finalize
 				if (currentTool.modeAdditive) {
@@ -333,7 +421,7 @@ const lineTool = {
 						type: "line",
 						vertices: [
 							...currentTool.lineCoords,
-							snapped
+							endCoord
 						]
 					});
 				}
@@ -343,8 +431,8 @@ const lineTool = {
 					//If would delete a line segment, split the shape into 2 or more shapes
 					console.log(`Was ${shapes.length} shapes`);
 					shapes = shapes.map(shape => {
-						if (doLineIntersectShape(shape, currentTool.startCoord, snapped)) {
-							return splitShape(shape, currentTool.startCoord, snapped);
+						if (doLineIntersectShape(shape, currentTool.startCoord, endCoord)) {
+							return splitShape(shape, currentTool.startCoord, endCoord);
 						}
 						return shape;
 					}).flat();
@@ -360,26 +448,22 @@ const lineTool = {
 		}
 	},
 	drawTool: () => {
-		const snapped = snapToGrid(mouseToWorld());
+		const endCoord = (currentTool.modeAdditive) ? snapToGrid(mouseToWorld()) : mouseToWorld();
 		ctx.save();
 		if (currentTool.modeAdditive) ctx.strokeStyle = "#00AA00";
 		else ctx.strokeStyle = "#AA0000";
 		ctx.beginPath();
 		if (currentTool.modeAdditive) {
-			for (const [v1, v2] of iterateListSlidingWindow([...currentTool.lineCoords, snapped])) {
-				ctx.moveTo(visualScale * v1.x, visualScale * v1.y);
-				ctx.lineTo(visualScale * v2.x, visualScale * v2.y);
+			for (const [v1, v2] of iterateListSlidingWindow([...currentTool.lineCoords, endCoord])) {
+				const [sc1, sc2] = [worldToScreen(v1), worldToScreen(v2)]
+				ctx.moveTo(sc1.x, sc1.y);
+				ctx.lineTo(sc2.x, sc2.y);
 			}
 		}
 		else { //currentTool.modeSubtractive
-			ctx.moveTo(
-				visualScale * currentTool.startCoord.x,
-				visualScale * currentTool.startCoord.y
-			);
-			ctx.lineTo(
-				visualScale * snapped.x,
-				visualScale * snapped.y
-			);
+			const [sc1, sc2] = [worldToScreen(currentTool.startCoord), worldToScreen(endCoord)]
+			ctx.moveTo(sc1.x, sc1.y);
+			ctx.lineTo(sc2.x, sc2.y);
 		}
 		ctx.stroke();
 
@@ -392,15 +476,88 @@ const lineTool = {
 			//If would delete
 			for (const shape of shapes) {
 				for (const [v1, v2] of iterateListSlidingWindow(shape.vertices)) {
-					if (doLinesIntersect(v1, v2, currentTool.startCoord, snapped)){
-						ctx.moveTo(v1.x * visualScale, v1.y * visualScale);
-						ctx.lineTo(v2.x * visualScale, v2.y * visualScale);
+					if (doLinesIntersect(v1, v2, currentTool.startCoord, endCoord)) {
+						const [sc1, sc2] = [worldToScreen(v1), worldToScreen(v2)]
+						ctx.moveTo(sc1.x, sc1.y);
+						ctx.lineTo(sc2.x, sc2.y);
 					}
 				}
 			}
 			ctx.stroke();
 		}
 		
+		ctx.restore();
+	}
+};
+
+/** @type {DefaultTool} */
+const doorTool = {
+	defaultState: {
+		name: "Door (std.)",
+		active: false,
+
+		isStandardDoor: true,
+
+		/** @type {Coord} */
+		startCoord: {x: 0, y: 0},
+	},
+
+	eventHandlers: {
+		mousedown: (event) => {
+			const mouseButtons = mouseButtonsPressed(event);
+			console.log(mouseButtons);
+			const worldPos = mouseToWorld();
+			const snapped = snapToGrid(worldPos);
+
+			//On initial press, store initial coordinate and exit early
+			if (!currentTool.active) {
+				currentTool.active = true;
+				currentTool.startCoord = snapped;
+				return;
+			}
+
+			//Discard if there are more than one button pressed
+			if (mouseButtons.numPressed > 1) {
+				selectTool(doorTool);
+			}
+		},
+		mouseup: (event) => {
+			if (!currentTool.active) return;
+
+			const mouseButtons = mouseButtonsPressed(event);
+			const endCoord = snapToGrid(mouseToWorld());
+
+			if (!mouseButtons.any) {	
+				shapes.push({
+					type: "door",
+					subtype: (currentTool.isStandardDoor) ? "door-standard" : "door-archway",
+					vertices: [currentTool.startCoord, endCoord]
+				});
+				currentTool.active = false;
+			}
+		},
+		keydown: (event) => {
+			if (event.code === "KeyR") {
+				currentTool.isStandardDoor = !currentTool.isStandardDoor;
+				currentTool.name = (currentTool.isStandardDoor) ? "Door (std.)" : "Door (archway)";
+			}
+			if (event.code === "Escape") { //Discard anything in progress
+				selectTool(doorTool);
+			}
+		}
+	},
+	drawTool: () => {
+		const endCoord = snapToGrid(mouseToWorld());
+		const [sc1, sc2] = [worldToScreen(currentTool.startCoord), worldToScreen(endCoord)]
+
+		ctx.save();
+		ctx.strokeStyle = "#00AA88";
+
+		ctx.beginPath();
+		ctx.moveTo(sc1.x, sc1.y);
+		ctx.lineTo(sc2.x, sc2.y);
+		ctx.stroke();
+
 		ctx.restore();
 	}
 };
@@ -418,7 +575,7 @@ const lineTool = {
 
 /**
  * 
- * @param {Shape} shape where there is at least one intersection with the line
+ * @param {Shape} shape where there is at least one intersection with line AB
  * @param {*} A 
  * @param {*} B 
  */
@@ -517,27 +674,33 @@ const doLinesIntersect = (A, B, C, D) => {
 			keyboard.pressedKeys.push(event.code);
 		}
 
-		if (event.code == "KeyR") camera.zoom *= 2;
-		if (event.code == "KeyF") camera.zoom /= 2;
-		//console.log(`KY: ${event.key}`, typeof(event.key), event.code)
+
+		if (event.code == "Home") { //Reset camera to worldspace origin
+			camera.x = 0;
+			camera.y = 0;
+			camera.zoomFactor = 1.0;
+		}
+
 		if (event.code == "Space") {
 			controller.cameraDragMode = true;
 			canvas.style.cursor = "grabbing";
 		}
-		else if (event.code == "KeyQ" || event.code == "KeyE") {
-			if (event.code == "KeyQ" && controller.snapScale > 1) {controller.snapScale /= 2;}
-			if (event.code == "KeyE" && controller.snapScale < 4) {controller.snapScale *= 2;}
-		}
+
+		if (event.code == "KeyQ") decreaseGridSnap();
+		if (event.code == "KeyE") increaseGridSnap();
+
 		else if (event.code == "Digit1" && currentTool.name !== squareTool.defaultState.name) {
 			selectTool(squareTool);
 		}
 		else if (event.code == "Digit2" && currentTool.name !== lineTool.defaultState.name) {
 			selectTool(lineTool);
 		}
+		else if (event.code == "Digit3" && currentTool.name !== doorTool.defaultState.name) {
+			selectTool(doorTool);
+		}
 		if (currentTool.eventHandlers.keydown) {
 			currentTool.eventHandlers.keydown(event);
 		}
-		draw();
 	})
 
 	window.addEventListener("keyup", (event) => {
@@ -551,26 +714,40 @@ const doLinesIntersect = (A, B, C, D) => {
 		if (currentTool.eventHandlers.keyup) {
 			currentTool.eventHandlers.keyup(event);
 		}
-		draw();
 	})
 
 	canvas.addEventListener("mouseenter", (event) => {
 		userInCanvas = true;
-		//console.log("URIN");
 	})
 
 	canvas.addEventListener("mouseleave", (event) => {
 		userInCanvas = false;
-		//console.log("UROUT");
 	})
+
+	canvas.addEventListener("wheel", (event) => {
+		event.preventDefault();
+		if (!event.shiftKey) {
+			if (event.deltaY < 0) { //Wheel Up
+				increaseZoom();
+			}
+			if (event.deltaY > 0) { //Wheel Down
+				decreaseZoom();
+			}
+		}
+		if (event.shiftKey) {
+			if (event.deltaY < 0) { //Wheel Up
+				increaseGridSnap();
+			}
+			if (event.deltaY > 0) { //Wheel Down
+				decreaseGridSnap();
+			}
+		}
+	})
+
 	canvas.addEventListener("mousemove", (event) => {
 		const rect = canvas.getBoundingClientRect();
 		mouse.x = event.clientX - rect.x;
 		mouse.y = event.clientY - rect.y;
-		//"Canvas coordinate-space"
-
-		//console.log("Mo2ve", mouse);
-		draw();
 	})
 
 	canvas.addEventListener("mousedown", (event) => {
@@ -579,51 +756,40 @@ const doLinesIntersect = (A, B, C, D) => {
 		if (currentTool.eventHandlers.mousedown) {
 			currentTool.eventHandlers.mousedown(event);
 		}
-		draw();
 	})
 
 	canvas.addEventListener("mouseup", (event) => {
-		//console.log("Up", event.buttons);
-		//dragger.isDragging = false;
 		if (currentTool.eventHandlers.mouseup) {
 			currentTool.eventHandlers.mouseup(event);
 		}
-		draw();
 	})
 }
 
 
 
-const mouseToWorld = () => {
-	return {
-		x: mouse.x / visualScale,
-		y: mouse.y / visualScale,
-	}
-}
 
 /**
- * @param {Coord} coord 
- * @returns {Coord}
+ * @param {Coord} coord Coordinate in world-space
+ * @returns {Coord} The closest snap-point in world-space
  */
 const snapToGrid = (coord) => {
 	const snapScale = controller.snapScale;
 	const unsnapX = coord.x / snapScale;
 	const unsnapY = coord.y / snapScale;
 
-	const [xint, xfrac] = [Math.floor(unsnapX), unsnapX - Math.trunc(unsnapX)];
-	const [yint, yfrac] = [Math.floor(unsnapY), unsnapY - Math.trunc(unsnapY)];
+	//Determine the direction of "towards the origin" depending on the sign of the coordinate
+	const snapXawayFromOrigin = (unsnapX >= 0) ? Math.ceil  : Math.floor;
+	const snapXtowardsOrigin  = (unsnapX >= 0) ? Math.floor : Math.ceil;
 
-	const snappedX = (() => {
-		if (xfrac >= 0.75) return xint + 1;
-		else if (xfrac >= 0.25) return xint + 0.5;
-		return xint;
-	})();
+	const snapYawayFromOrigin = (unsnapY >= 0) ? Math.ceil  : Math.floor;
+	const snapYtowardsOrigin  = (unsnapY >= 0) ? Math.floor : Math.ceil;
 
-	const snappedY = (() => {
-		if (yfrac >= 0.75) return yint + 1;
-		else if (yfrac >= 0.25) return yint + 0.5;
-		return yint;
-	})();
+	const fractionalX = Math.abs(unsnapX - Math.trunc(unsnapX));
+	const fractionalY = Math.abs(unsnapY - Math.trunc(unsnapY));
+
+	//If the fractional part of the coordinate is more than 0.5, snap away from the origin
+	const snappedX = (fractionalX >= 0.5) ? snapXawayFromOrigin(unsnapX) : snapXtowardsOrigin(unsnapX);
+	const snappedY = (fractionalY >= 0.5) ? snapYawayFromOrigin(unsnapY) : snapYtowardsOrigin(unsnapY);
 
 	return {
 		x: snappedX * snapScale,
@@ -634,14 +800,11 @@ const snapToGrid = (coord) => {
 /**
  * @template T
  * @param {T[]} list 
- * @param {boolean} includeFirstNLast With a list of ABC, will return [AB, BC] when false or [AB, BC, CA] when true
- * @returns 
+ * @param {boolean} includeFirstNLast With a list of ABCD, will return [[A,B], [B,C], [C,D]]
+ * @returns {T[][]}
  */
-const iterateListSlidingWindow = (list, includeFirstNLast = false) => {
-	return [
-		...list.slice(0, -1).map((element, index) => [element, list[index+1]]),
-		...[(includeFirstNLast) ? [list[0], list[list.length-1]] : undefined]
-	].filter(e => e);
+const iterateListSlidingWindow = (list) => {
+	return list.slice(0, -1).map((element, index) => [element, list[index+1]]);
 }
 
 
@@ -681,26 +844,84 @@ const iterateListSlidingWindow = (list, includeFirstNLast = false) => {
                                ,___/|
 
 */
+
+/** @param {Vector} vec @param {number} factor */
+const vecMul = (vec, factor) => {return {x: vec.x * factor, y: vec.y * factor}}
+
+/** Element-wise subtraction of V1 - V2 = Vnew. Geometrically, the resulting vector is as if V2 were the origin. 
+ * @param {Vector} vec1 @param {Vector} vec2 */
+const subtractVectors = (vec1, vec2) => vector(vec1.x - vec2.x, vec1.y - vec2.y);
+
+/** Element-wise addition of V1 + V2 = Vnew. @param {Vector} vec1 @param {Vector} vec2 */
+const addVectors = (vec1, vec2) => vector(vec1.x + vec2.x, vec1.y + vec2.y);
+
+/** @param {Vector} vec */
+const vecLength = (vec) => Math.sqrt(vec.x * vec.x + vec.y * vec.y);
+
+/** @param {Vector} vec */
+const vecNormalize = (vec) => {
+	if (vec.x == 0 && vec.y == 0) return vec;
+
+	const len = vecLength(vec);
+	return vector(vec.x / len, vec.y / len);
+}
+
+/**
+ * 
+ * @param {Shape} shape A shape where type == "door"
+ */
+const produceDoorWorldspaceLines = (shape) => {
+	const p1 = shape.vertices[0];
+	const p2 = shape.vertices[1];
+
+	/** @type {Segment[]} */
+	let output = [];
+	const betweener = subtractVectors(p2, p1);
+	const bDirection = vecNormalize(betweener); //Pointing P1 -> P2
+	const totalLen = vecLength(betweener);
+	const wallDistBeforeDoor = Math.min(0.5, totalLen / 4);
+
+	const vBeforeWall = vecMul(bDirection, wallDistBeforeDoor);
+
+	output.push(segment(p1, addVectors(p1, vBeforeWall)));
+	output.push(segment(p2, subtractVectors(p2, vBeforeWall)));
+	
+	if (shape.subtype == "door-standard") {
+		const doorThiccness = 0.25 / 2;
+		const perpVec = vecNormalize(vector(betweener.y, -betweener.x));
+
+		const vCorner1 = addVectors(vBeforeWall, vecMul(perpVec, doorThiccness));
+		const vCorner2 = addVectors(vBeforeWall, vecMul(perpVec, -doorThiccness));
+		output.push(segment(addVectors(p1, vCorner1),      addVectors(p1, vCorner2)));
+		output.push(segment(subtractVectors(p2, vCorner1), subtractVectors(p2, vCorner2)));
+		
+		output.push(segment(subtractVectors(p2, vCorner1), addVectors(p1, vCorner2)));
+		output.push(segment(addVectors(p1, vCorner1),      subtractVectors(p2, vCorner2)));
+	}
+
+	return output;
+}
+
 const drawShapes = () => {
 	ctx.save();
-	for (const shape of shapes) {
-		if (shape.drawCustom) shape.drawCustom();
-	}
-	ctx.restore();
-
-
-	ctx.save();
-	ctx.strokeStyle = "#000000";
-	ctx.fillStyle = "#DDDDDD";
 	ctx.beginPath();
 	for (const shape of shapes) {
-		//let isClosedShape = false;
-		//if (shape.type === "rect") isClosedShape = true;
-		//if (shape.type === "line") isClosedShape = false;
+		
+		//TODO: not updated yet
+		if (shape.type === "door") {
+			for (const {p1, p2} of produceDoorWorldspaceLines(shape)) {
+				const [sc1, sc2] = [worldToScreen(p1), worldToScreen(p2)];
+				ctx.moveTo(sc1.x, sc1.y);
+				ctx.lineTo(sc2.x, sc2.y);
+			}
+
+			continue;
+		}
 
 		for (const [v1, v2] of iterateListSlidingWindow(shape.vertices)) {
-			ctx.moveTo(v1.x * visualScale, v1.y * visualScale);
-			ctx.lineTo(v2.x * visualScale, v2.y * visualScale);
+			const [sc1, sc2] = [worldToScreen(v1), worldToScreen(v2)];
+			ctx.moveTo(sc1.x, sc1.y);
+			ctx.lineTo(sc2.x, sc2.y);
 		}
 	}
 	ctx.stroke();
@@ -708,16 +929,22 @@ const drawShapes = () => {
 }
 
 const imposeGridHatching = () => {
+	const cam = cameraAsRect();
+	const worldX = Math.floor(cam.x);
+	const worldY = Math.ceil(cam.y);
+
 	ctx.save();
 	ctx.strokeStyle = "#3AA1A580"
 	ctx.beginPath()
-	for (let y = 0; y < 40; y++) {
-		ctx.moveTo(-10, y * visualScale);
-		ctx.lineTo(ctx.canvas.width+10, y * visualScale);
+	for (let wy = worldY; wy > cam.y - cam.h; wy--) {
+		const {y} = worldToScreen(coord(0, wy));
+		ctx.moveTo(0, y);
+		ctx.lineTo(ctx.canvas.width, y);
 	}
-	for (let x = 0; x < 80; x++) {
-		ctx.moveTo(x * visualScale, -10);
-		ctx.lineTo(x * visualScale, ctx.canvas.height+10);
+	for (let wx = worldX; wx < cam.x + cam.w; wx++) {
+		const {x} = worldToScreen(coord(wx, 0));
+		ctx.moveTo(x, 0);
+		ctx.lineTo(x, ctx.canvas.height);
 	}
 	ctx.stroke();
 	ctx.restore();
@@ -725,8 +952,9 @@ const imposeGridHatching = () => {
 
 const drawMouseIndicator = () => {
 	const snapped = snapToGrid(mouseToWorld())
+	const drawLocation = worldToScreen(snapped);
 	ctx.beginPath();
-	ctx.arc(snapped.x * visualScale, snapped.y * visualScale, 2.5, 0, Math.PI * 2);
+	ctx.arc(drawLocation.x, drawLocation.y, 2.5, 0, Math.PI * 2);
 	ctx.stroke();
 }
 
@@ -739,11 +967,17 @@ const draw = () => {
 		ctx.fillStyle = "#DDDDDD";
 	}
 	ctx.save();
-	ctx.resetTransform();
 	ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-	ctx.restore();
 
-	applyCamera();
+	if (false && "showorigin"){
+		ctx.beginPath();
+		const origin = worldToScreen(coord(0, 0));
+		ctx.arc(origin.x, origin.y, 5, 0, Math.PI * 2);
+		ctx.fill();
+		ctx.stroke();
+		ctx.restore();
+	}
+
 	imposeGridHatching();
 
 	drawShapes();
@@ -755,22 +989,28 @@ const draw = () => {
 	}
 
 	const ttt = canvas.getBoundingClientRect()
-	//ctx.strokeText(`Tool: ${currentTool.name}`, 20, ctx.canvas.height - 35);
-	ctx.strokeText(`Tool: ${currentTool.name}`, 20, ctx.canvas.height - 35);
-	//ctx.strokeText(`Snapscale: ${controller.snapScale * 5} ft`, 20, ctx.canvas.height - 5);
-	ctx.strokeText(`Snapscale: ${controller.snapScale * 5} ft`, 20, ctx.canvas.height - 5);
-}
-
-
-const applyCamera = () => {
-	const [viewportWidth, viewportHeight] = [ctx.canvas.width, ctx.canvas.height];
-	ctx.setTransform(
-		camera.zoom, 0,
-		0, camera.zoom,
-		(-camera.x * camera.zoom + viewportWidth/2),
-		(camera.y * camera.zoom + viewportHeight/2)
+	ctx.strokeText(
+		`Tool: ${currentTool.name}`,
+		ctx.canvas.width - 200,
+		ctx.canvas.height - 65
+	);
+	ctx.strokeText(
+		`Zoom: ${camera.zoomFactor}`,
+		ctx.canvas.width - 200,
+		ctx.canvas.height - 35
+	);
+	ctx.strokeText(
+		`Snapscale: ${controller.snapScale * 10} ft`,
+		ctx.canvas.width - 200,
+		ctx.canvas.height - 5
 	);
 }
+
+
+
+
+
+
 
 
 
@@ -779,7 +1019,9 @@ const applyCamera = () => {
  */
 const update = (deltaTime) => {
 	if (!userInCanvas) return;
-	const speed = 100 / camera.zoom;
+	const speed = 10.0 / camera.zoomFactor;
+	const mod = speed * deltaTime;
+
 	if (keyboard.pressedKeys.includes("KeyD")) camera.x += speed * deltaTime;
 	if (keyboard.pressedKeys.includes("KeyA")) camera.x -= speed * deltaTime;
 	if (keyboard.pressedKeys.includes("KeyW")) camera.y += speed * deltaTime;
@@ -803,8 +1045,78 @@ const processFrame = (currentFrametime) => {
 
 
 
+
+const CURRENT_DATA_VERSION = 1;
+const getStateForSaving = () => {
+	return {
+		dataVersion: CURRENT_DATA_VERSION,
+		shapes: shapes,
+	}
+}
+/**
+ * 
+ * @param {{dataVersion: number}} obj 
+ */
+const loadStateFromObject = (obj) => {
+	console.log(`Loading data-version: ${obj.dataVersion}`);
+	if (obj.dataVersion > CURRENT_DATA_VERSION) {
+		console.error(`Cannot Load: file data version is ${obj.dataVersion}, latest is ${CURRENT_DATA_VERSION}`);
+		return;
+	}
+	if (obj.dataVersion < CURRENT_DATA_VERSION) {
+		//PERFORM MIGRATION
+	}
+
+	
+	shapes = obj.shapes;
+	console.log(`Loaded ${shapes.length} shapes`);
+}
+
+const downloadMap = () => {
+	const url = URL.createObjectURL(
+		new Blob([JSON.stringify(getStateForSaving(), null, '\t')], {type: "application/json"}
+	));
+
+	const link = document.createElement("a");
+	link.setAttribute("href", url);
+	link.setAttribute("download", "mymap.json");
+	link.click();
+
+	document.body.removeChild(link);
+	URL.revokeObjectURL(link);
+}
+
+document.getElementById("fileInput").addEventListener("change", (event) => {
+	if (!(event.target.files) || event.target.files.length < 1) return;
+	const file = event.target.files[0];
+
+	const reader = new FileReader();
+	reader.onload = (e) => {
+		try {
+			const result = JSON.parse(e.target.result);
+			loadStateFromObject(result);
+		}
+		catch (err) {
+			console.error(`Invalid JSON format:`, err)
+		}
+	}
+	reader.readAsText(file);
+})
+
+
+
+
+console.log(cameraAsRect())
+
 selectTool(lineTool);
 requestAnimationFrame(processFrame);
+
+
+
+
+
+
+
 
 
 
