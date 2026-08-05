@@ -29,10 +29,30 @@
  */
 
 /**
+ * An XY coordinate in cartesian space
  * @typedef {Object} Coord
  * @property {number} x
  * @property {number} y
  */
+
+/**
+ * Magnitude
+ * @typedef {Object} Vector
+ * @property {number} x
+ * @property {number} y
+ */
+
+/** @param {number} x @param {number} y @returns {Vector} */
+const vector = (x, y) => { return {x: x, y: y}; };
+
+/**
+ * A line segment defined by two coordinates in cartesian space
+ * @typedef {Object} Segment
+ * @property {Coord} p1
+ * @property {Coord} p2
+ */
+/** @param {Coord} p1 @param {Coord} p2 @returns {Segment} */
+const segment = (p1, p2) => { return {p1: p1, p2: p2}; };
 
 /**
  * Assume x and y are the minimum of vertices (closest to origin)
@@ -48,9 +68,8 @@
  * @param {number} y 
  * @returns {Coord}
  */
-const coord = (x, y) => {
-	return {x: x, y: y};
-};
+const coord = (x, y) => { return {x: x, y: y}; };
+
 
 /**
  * Return true if `low <= test <= high`, false otherwise
@@ -263,6 +282,7 @@ const selectTool = (defaultTool) => {
  `----'                                `---'  
 */
 
+//TODO: something is still wrong with the drawing
 /** @type {DefaultTool} */
 const squareTool = {
 	defaultState: {
@@ -324,15 +344,23 @@ const squareTool = {
 			w: Math.max(currentTool.startCoord.x, snapped.x) - Math.min(currentTool.startCoord.x, snapped.x),
 			h: Math.max(currentTool.startCoord.y, snapped.y) - Math.min(currentTool.startCoord.y, snapped.y),
 		};
+		const verts = [
+			coord(dragRect.x, dragRect.y),
+			coord(dragRect.x + dragRect.w, dragRect.y),
+			coord(dragRect.x + dragRect.w, dragRect.y + dragRect.h),
+			coord(dragRect.x, dragRect.y + dragRect.h),
+			coord(dragRect.x, dragRect.y), //Close shape
+		]
 
 		ctx.save();
 		ctx.strokeStyle = "#00AA00";
-		ctx.strokeRect(
-			visualScale * dragRect.x,
-			visualScale * dragRect.y,
-			visualScale * dragRect.w,
-			visualScale * dragRect.h,
-		);
+		ctx.beginPath();
+		for (const [v1, v2] of iterateListSlidingWindow(verts)) {
+			const [sc1, sc2] = [worldToScreen(v1), worldToScreen(v2)];
+			ctx.moveTo(sc1.x, sc1.y);
+			ctx.lineTo(sc2.x, sc2.y);
+		}
+		ctx.stroke();
 		ctx.restore();
 
 		ctx.strokeText(`${dragRect.w * 10}x${dragRect.h * 10} ft`, mouse.x + 25, mouse.y + 25);
@@ -427,19 +455,15 @@ const lineTool = {
 		ctx.beginPath();
 		if (currentTool.modeAdditive) {
 			for (const [v1, v2] of iterateListSlidingWindow([...currentTool.lineCoords, endCoord])) {
-				ctx.moveTo(visualScale * v1.x, visualScale * v1.y);
-				ctx.lineTo(visualScale * v2.x, visualScale * v2.y);
+				const [sc1, sc2] = [worldToScreen(v1), worldToScreen(v2)]
+				ctx.moveTo(sc1.x, sc1.y);
+				ctx.lineTo(sc2.x, sc2.y);
 			}
 		}
 		else { //currentTool.modeSubtractive
-			ctx.moveTo(
-				visualScale * currentTool.startCoord.x,
-				visualScale * currentTool.startCoord.y
-			);
-			ctx.lineTo(
-				visualScale * endCoord.x,
-				visualScale * endCoord.y
-			);
+			const [sc1, sc2] = [worldToScreen(currentTool.startCoord), worldToScreen(endCoord)]
+			ctx.moveTo(sc1.x, sc1.y);
+			ctx.lineTo(sc2.x, sc2.y);
 		}
 		ctx.stroke();
 
@@ -452,9 +476,10 @@ const lineTool = {
 			//If would delete
 			for (const shape of shapes) {
 				for (const [v1, v2] of iterateListSlidingWindow(shape.vertices)) {
-					if (doLinesIntersect(v1, v2, currentTool.startCoord, endCoord)){
-						ctx.moveTo(v1.x * visualScale, v1.y * visualScale);
-						ctx.lineTo(v2.x * visualScale, v2.y * visualScale);
+					if (doLinesIntersect(v1, v2, currentTool.startCoord, endCoord)) {
+						const [sc1, sc2] = [worldToScreen(v1), worldToScreen(v2)]
+						ctx.moveTo(sc1.x, sc1.y);
+						ctx.lineTo(sc2.x, sc2.y);
 					}
 				}
 			}
@@ -468,8 +493,10 @@ const lineTool = {
 /** @type {DefaultTool} */
 const doorTool = {
 	defaultState: {
-		name: "Door",
+		name: "Door (std.)",
 		active: false,
+
+		isStandardDoor: true,
 
 		/** @type {Coord} */
 		startCoord: {x: 0, y: 0},
@@ -503,13 +530,17 @@ const doorTool = {
 			if (!mouseButtons.any) {	
 				shapes.push({
 					type: "door",
-					subtype: "door-standard",
+					subtype: (currentTool.isStandardDoor) ? "door-standard" : "door-archway",
 					vertices: [currentTool.startCoord, endCoord]
 				});
-				selectTool(doorTool);
+				currentTool.active = false;
 			}
 		},
 		keydown: (event) => {
+			if (event.code === "KeyR") {
+				currentTool.isStandardDoor = !currentTool.isStandardDoor;
+				currentTool.name = (currentTool.isStandardDoor) ? "Door (std.)" : "Door (archway)";
+			}
 			if (event.code === "Escape") { //Discard anything in progress
 				selectTool(doorTool);
 			}
@@ -517,18 +548,14 @@ const doorTool = {
 	},
 	drawTool: () => {
 		const endCoord = snapToGrid(mouseToWorld());
-		ctx.save();
+		const [sc1, sc2] = [worldToScreen(currentTool.startCoord), worldToScreen(endCoord)]
 
+		ctx.save();
 		ctx.strokeStyle = "#00AA88";
+
 		ctx.beginPath();
-		ctx.moveTo(
-			visualScale * currentTool.startCoord.x,
-			visualScale * currentTool.startCoord.y
-		);
-		ctx.lineTo(
-			visualScale * endCoord.x,
-			visualScale * endCoord.y
-		);
+		ctx.moveTo(sc1.x, sc1.y);
+		ctx.lineTo(sc2.x, sc2.y);
 		ctx.stroke();
 
 		ctx.restore();
@@ -654,9 +681,6 @@ const doLinesIntersect = (A, B, C, D) => {
 			camera.zoomFactor = 1.0;
 		}
 
-		if (event.code == "KeyR") increaseZoom();
-		if (event.code == "KeyF") decreaseZoom();
-
 		if (event.code == "Space") {
 			controller.cameraDragMode = true;
 			canvas.style.cursor = "grabbing";
@@ -776,14 +800,11 @@ const snapToGrid = (coord) => {
 /**
  * @template T
  * @param {T[]} list 
- * @param {boolean} includeFirstNLast With a list of ABC, will return [AB, BC] when false or [AB, BC, CA] when true
- * @returns 
+ * @param {boolean} includeFirstNLast With a list of ABCD, will return [[A,B], [B,C], [C,D]]
+ * @returns {T[][]}
  */
-const iterateListSlidingWindow = (list, includeFirstNLast = false) => {
-	return [
-		...list.slice(0, -1).map((element, index) => [element, list[index+1]]),
-		...[(includeFirstNLast) ? [list[0], list[list.length-1]] : undefined]
-	].filter(e => e);
+const iterateListSlidingWindow = (list) => {
+	return list.slice(0, -1).map((element, index) => [element, list[index+1]]);
 }
 
 
@@ -823,6 +844,64 @@ const iterateListSlidingWindow = (list, includeFirstNLast = false) => {
                                ,___/|
 
 */
+
+/** @param {Vector} vec @param {number} factor */
+const vecMul = (vec, factor) => {return {x: vec.x * factor, y: vec.y * factor}}
+
+/** Element-wise subtraction of V1 - V2 = Vnew. Geometrically, the resulting vector is as if V2 were the origin. 
+ * @param {Vector} vec1 @param {Vector} vec2 */
+const subtractVectors = (vec1, vec2) => vector(vec1.x - vec2.x, vec1.y - vec2.y);
+
+/** Element-wise addition of V1 + V2 = Vnew. @param {Vector} vec1 @param {Vector} vec2 */
+const addVectors = (vec1, vec2) => vector(vec1.x + vec2.x, vec1.y + vec2.y);
+
+/** @param {Vector} vec */
+const vecLength = (vec) => Math.sqrt(vec.x * vec.x + vec.y * vec.y);
+
+/** @param {Vector} vec */
+const vecNormalize = (vec) => {
+	if (vec.x == 0 && vec.y == 0) return vec;
+
+	const len = vecLength(vec);
+	return vector(vec.x / len, vec.y / len);
+}
+
+/**
+ * 
+ * @param {Shape} shape A shape where type == "door"
+ */
+const produceDoorWorldspaceLines = (shape) => {
+	const p1 = shape.vertices[0];
+	const p2 = shape.vertices[1];
+
+	/** @type {Segment[]} */
+	let output = [];
+	const betweener = subtractVectors(p2, p1);
+	const bDirection = vecNormalize(betweener); //Pointing P1 -> P2
+	const totalLen = vecLength(betweener);
+	const wallDistBeforeDoor = Math.min(0.5, totalLen / 4);
+
+	const vBeforeWall = vecMul(bDirection, wallDistBeforeDoor);
+
+	output.push(segment(p1, addVectors(p1, vBeforeWall)));
+	output.push(segment(p2, subtractVectors(p2, vBeforeWall)));
+	
+	if (shape.subtype == "door-standard") {
+		const doorThiccness = 0.25 / 2;
+		const perpVec = vecNormalize(vector(betweener.y, -betweener.x));
+
+		const vCorner1 = addVectors(vBeforeWall, vecMul(perpVec, doorThiccness));
+		const vCorner2 = addVectors(vBeforeWall, vecMul(perpVec, -doorThiccness));
+		output.push(segment(addVectors(p1, vCorner1),      addVectors(p1, vCorner2)));
+		output.push(segment(subtractVectors(p2, vCorner1), subtractVectors(p2, vCorner2)));
+		
+		output.push(segment(subtractVectors(p2, vCorner1), addVectors(p1, vCorner2)));
+		output.push(segment(addVectors(p1, vCorner1),      subtractVectors(p2, vCorner2)));
+	}
+
+	return output;
+}
+
 const drawShapes = () => {
 	ctx.save();
 	ctx.beginPath();
@@ -830,44 +909,17 @@ const drawShapes = () => {
 		
 		//TODO: not updated yet
 		if (shape.type === "door") {
-			const [v1, v2] = shape.vertices;
-			const dwidth = 0.3;
-			const lenBeforeDoor = 0.25;
-			if (v1.x == v2.x) {
-				//Vert door
-				ctx.rect(
-					(v1.x - dwidth/2) * visualScale,
-					(Math.min(v1.y, v2.y) + lenBeforeDoor) * visualScale,
-					dwidth * visualScale,
-					(Math.abs(v2.y - v1.y) - 2 * lenBeforeDoor) * visualScale
-				);
-				ctx.moveTo(v1.x * visualScale, v1.y * visualScale);
-				ctx.lineTo(v1.x * visualScale, (v1.y + lenBeforeDoor * ((v1.y > v2.y) ? -1 : 1)) * visualScale);
-				ctx.moveTo(v2.x * visualScale, v2.y * visualScale);
-				ctx.lineTo(v2.x * visualScale, (v2.y - lenBeforeDoor * ((v1.y > v2.y) ? -1 : 1)) * visualScale);
+			for (const {p1, p2} of produceDoorWorldspaceLines(shape)) {
+				const [sc1, sc2] = [worldToScreen(p1), worldToScreen(p2)];
+				ctx.moveTo(sc1.x, sc1.y);
+				ctx.lineTo(sc2.x, sc2.y);
 			}
-			else if (v1.y == v2.y) {
-				//Horiz door
-				ctx.rect(
-					(Math.min(v1.x, v2.x) + lenBeforeDoor) * visualScale,
-					(v1.y - dwidth/2) * visualScale,
-					(Math.abs(v2.x - v1.x) - 2 * lenBeforeDoor) * visualScale,
-					dwidth * visualScale
-				);
-				ctx.moveTo(v1.x * visualScale, v1.y * visualScale);
-				ctx.lineTo((v1.x + lenBeforeDoor * ((v1.x > v2.x) ? -1 : 1)) * visualScale, v1.y * visualScale);
-				ctx.moveTo(v2.x * visualScale, v2.y * visualScale);
-				ctx.lineTo((v2.x - lenBeforeDoor * ((v1.x > v2.x) ? -1 : 1)) * visualScale, v2.y * visualScale);
-			}
-			else {
-				ctx.moveTo(v1.x * visualScale, v1.y * visualScale);
-				ctx.lineTo(v2.x * visualScale, v2.y * visualScale);
-			}
+
 			continue;
 		}
 
 		for (const [v1, v2] of iterateListSlidingWindow(shape.vertices)) {
-			const [sc1, sc2] = [worldToScreen(v1), worldToScreen(v2)]
+			const [sc1, sc2] = [worldToScreen(v1), worldToScreen(v2)];
 			ctx.moveTo(sc1.x, sc1.y);
 			ctx.lineTo(sc2.x, sc2.y);
 		}
@@ -916,13 +968,15 @@ const draw = () => {
 	}
 	ctx.save();
 	ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-	
-	ctx.beginPath();
-	const origin = worldToScreen(coord(0, 0));
-	ctx.arc(origin.x, origin.y, 5, 0, Math.PI * 2);
-	ctx.fill();
-	ctx.stroke();
-	ctx.restore();
+
+	if (false && "showorigin"){
+		ctx.beginPath();
+		const origin = worldToScreen(coord(0, 0));
+		ctx.arc(origin.x, origin.y, 5, 0, Math.PI * 2);
+		ctx.fill();
+		ctx.stroke();
+		ctx.restore();
+	}
 
 	imposeGridHatching();
 
@@ -937,17 +991,17 @@ const draw = () => {
 	const ttt = canvas.getBoundingClientRect()
 	ctx.strokeText(
 		`Tool: ${currentTool.name}`,
-		ctx.canvas.width - 180,
+		ctx.canvas.width - 200,
 		ctx.canvas.height - 65
 	);
 	ctx.strokeText(
 		`Zoom: ${camera.zoomFactor}`,
-		ctx.canvas.width - 180,
+		ctx.canvas.width - 200,
 		ctx.canvas.height - 35
 	);
 	ctx.strokeText(
 		`Snapscale: ${controller.snapScale * 10} ft`,
-		ctx.canvas.width - 180,
+		ctx.canvas.width - 200,
 		ctx.canvas.height - 5
 	);
 }
