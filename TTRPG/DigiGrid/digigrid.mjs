@@ -157,10 +157,10 @@ let keyboard = {
 }
 let controller = {
 	cameraDragMode: false,
-	snapScale: 2,
+	snapScale: 1,
 }
-const MIN_SNAP = 1;
-const MAX_SNAP = 4;
+const MIN_SNAP = 0.5;
+const MAX_SNAP = 2;
 const increaseGridSnap = () => {
 	if (controller.snapScale < MAX_SNAP) controller.snapScale *= 2;
 }
@@ -177,6 +177,8 @@ let camera = {
 	baseHeight: 30,
 	zoomFactor: 1.0,
 }
+const increaseZoom = () => camera.zoomFactor += 0.25;
+const decreaseZoom = () => {if (camera.zoomFactor > 0.25) camera.zoomFactor -= 0.25};
 
 /** Visible area as a World-space rectangle @returns {Rect} */
 const cameraAsRect = () => {
@@ -645,8 +647,15 @@ const doLinesIntersect = (A, B, C, D) => {
 			keyboard.pressedKeys.push(event.code);
 		}
 
-		if (event.code == "KeyR") camera.zoomFactor *= 2;
-		if (event.code == "KeyF") camera.zoomFactor /= 2;
+
+		if (event.code == "Home") { //Reset camera to worldspace origin
+			camera.x = 0;
+			camera.y = 0;
+			camera.zoomFactor = 1.0;
+		}
+
+		if (event.code == "KeyR") increaseZoom();
+		if (event.code == "KeyF") decreaseZoom();
 
 		if (event.code == "Space") {
 			controller.cameraDragMode = true;
@@ -695,10 +704,10 @@ const doLinesIntersect = (A, B, C, D) => {
 		event.preventDefault();
 		if (!event.shiftKey) {
 			if (event.deltaY < 0) { //Wheel Up
-				camera.zoomFactor += 0.25;
+				increaseZoom();
 			}
 			if (event.deltaY > 0) { //Wheel Down
-				camera.zoomFactor -= 0.25;
+				decreaseZoom();
 			}
 		}
 		if (event.shiftKey) {
@@ -709,7 +718,6 @@ const doLinesIntersect = (A, B, C, D) => {
 				decreaseGridSnap();
 			}
 		}
-		console.log(event);
 	})
 
 	canvas.addEventListener("mousemove", (event) => {
@@ -738,29 +746,26 @@ const doLinesIntersect = (A, B, C, D) => {
 
 /**
  * @param {Coord} coord Coordinate in world-space
- * @returns {Coord}
+ * @returns {Coord} The closest snap-point in world-space
  */
 const snapToGrid = (coord) => {
 	const snapScale = controller.snapScale;
 	const unsnapX = coord.x / snapScale;
 	const unsnapY = coord.y / snapScale;
 
-	//TODO: the snapping doesn't seem to quite work correctly when at a negative world coord
+	//Determine the direction of "towards the origin" depending on the sign of the coordinate
+	const snapXawayFromOrigin = (unsnapX >= 0) ? Math.ceil  : Math.floor;
+	const snapXtowardsOrigin  = (unsnapX >= 0) ? Math.floor : Math.ceil;
 
-	const [xint, xfrac] = [Math.floor(unsnapX), unsnapX - Math.trunc(unsnapX)];
-	const [yint, yfrac] = [Math.floor(unsnapY), unsnapY - Math.trunc(unsnapY)];
+	const snapYawayFromOrigin = (unsnapY >= 0) ? Math.ceil  : Math.floor;
+	const snapYtowardsOrigin  = (unsnapY >= 0) ? Math.floor : Math.ceil;
 
-	const snappedX = (() => {
-		if (xfrac >= 0.75) return xint + 1;
-		else if (xfrac >= 0.25) return xint + 0.5;
-		return xint;
-	})();
+	const fractionalX = Math.abs(unsnapX - Math.trunc(unsnapX));
+	const fractionalY = Math.abs(unsnapY - Math.trunc(unsnapY));
 
-	const snappedY = (() => {
-		if (yfrac >= 0.75) return yint + 1;
-		else if (yfrac >= 0.25) return yint + 0.5;
-		return yint;
-	})();
+	//If the fractional part of the coordinate is more than 0.5, snap away from the origin
+	const snappedX = (fractionalX >= 0.5) ? snapXawayFromOrigin(unsnapX) : snapXtowardsOrigin(unsnapX);
+	const snappedY = (fractionalY >= 0.5) ? snapYawayFromOrigin(unsnapY) : snapYtowardsOrigin(unsnapY);
 
 	return {
 		x: snappedX * snapScale,
@@ -932,12 +937,17 @@ const draw = () => {
 	const ttt = canvas.getBoundingClientRect()
 	ctx.strokeText(
 		`Tool: ${currentTool.name}`,
-		ctx.canvas.width - 220,
+		ctx.canvas.width - 180,
+		ctx.canvas.height - 65
+	);
+	ctx.strokeText(
+		`Zoom: ${camera.zoomFactor}`,
+		ctx.canvas.width - 180,
 		ctx.canvas.height - 35
 	);
 	ctx.strokeText(
-		`Snapscale: ${controller.snapScale * 5} ft`,
-		ctx.canvas.width - 220,
+		`Snapscale: ${controller.snapScale * 10} ft`,
+		ctx.canvas.width - 180,
 		ctx.canvas.height - 5
 	);
 }
