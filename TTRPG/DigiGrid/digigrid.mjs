@@ -138,9 +138,7 @@ const isIntersectingRects = (r1, r2) => {
 '------------------------'
 */
 const canvas = document.getElementById("canvas-id");
-/**
- * @type {CanvasRenderingContext2D}
- */
+/** @type {CanvasRenderingContext2D}  */
 const ctx = canvas.getContext("2d");
 
 const MILLISECONDS_PER_SECOND = 1000;
@@ -159,12 +157,71 @@ let keyboard = {
 }
 let controller = {
 	cameraDragMode: false,
-	snapScale: 1,
+	snapScale: 2,
 }
+const MIN_SNAP = 1;
+const MAX_SNAP = 4;
+const increaseGridSnap = () => {
+	if (controller.snapScale < MAX_SNAP) controller.snapScale *= 2;
+}
+const decreaseGridSnap = () => {
+	if (controller.snapScale > MIN_SNAP) controller.snapScale /= 2;
+}
+
+
+let camera = {
+	x: 0.0,
+	y: 0.0,
+
+	baseWidth: 40,
+	baseHeight: 30,
+	zoomFactor: 1.0,
+}
+
+/** Visible area as a World-space rectangle @returns {Rect} */
+const cameraAsRect = () => {
+	return {
+		x: camera.x - (camera.baseWidth / camera.zoomFactor) / 2,
+		y: camera.y + (camera.baseHeight / camera.zoomFactor) / 2,
+		w: (camera.baseWidth  / camera.zoomFactor),
+		h: (camera.baseHeight / camera.zoomFactor)
+	};
+}
+
+/** @param {Coord} point Worldspace location @returns {Coord} Screenspace location */
+const worldToScreen = (point) => {
+	const cam = cameraAsRect();
+	const [screenWidth, screenHeight] = [ctx.canvas.width, ctx.canvas.height];
+
+	return coord(
+		(point.x - cam.x) * (screenWidth / cam.w),
+		-(point.y - cam.y) * (screenHeight / cam.h)
+	);
+}
+
+/** @param {Coord} point Screenspace location @returns {Coord} Worldspace location */
+const screenToWorld = (point) => {
+	const cam = cameraAsRect();
+	const [screenWidth, screenHeight] = [ctx.canvas.width, ctx.canvas.height];
+
+	return coord(
+		point.x * (cam.w / screenWidth) + cam.x,
+		cam.y - point.y * (cam.h / screenHeight)
+	);
+}
+
+
+const mouseToWorld = () => screenToWorld(coord(mouse.x, mouse.y));
+
+
 /**
  * @type {Shape[]}
  */
 let shapes = [
+	{
+		type: "line",
+		vertices: [coord(1,1), coord(2,2), coord(3,1), coord(3,3), coord(5, 3)]
+	},
 	{
 		type: "line",
 		vertices: [coord(5,10), coord(10,10), coord(14,14), coord(18,10), coord(20, 10)]
@@ -179,11 +236,7 @@ let shapes = [
 	},
 ];
 
-let camera = {
-	x: 750.0,
-	y: -400.0,
-	zoom: 1.0,
-}
+
 
 /** @type {Tool} */
 let currentTool = {};
@@ -592,17 +645,17 @@ const doLinesIntersect = (A, B, C, D) => {
 			keyboard.pressedKeys.push(event.code);
 		}
 
-		if (event.code == "KeyR") camera.zoom *= 2;
-		if (event.code == "KeyF") camera.zoom /= 2;
-		//console.log(`KY: ${event.key}`, typeof(event.key), event.code)
+		if (event.code == "KeyR") camera.zoomFactor *= 2;
+		if (event.code == "KeyF") camera.zoomFactor /= 2;
+
 		if (event.code == "Space") {
 			controller.cameraDragMode = true;
 			canvas.style.cursor = "grabbing";
 		}
-		else if (event.code == "KeyQ" || event.code == "KeyE") {
-			if (event.code == "KeyQ" && controller.snapScale > 1) {controller.snapScale /= 2;}
-			if (event.code == "KeyE" && controller.snapScale < 4) {controller.snapScale *= 2;}
-		}
+
+		if (event.code == "KeyQ") decreaseGridSnap();
+		if (event.code == "KeyE") increaseGridSnap();
+
 		else if (event.code == "Digit1" && currentTool.name !== squareTool.defaultState.name) {
 			selectTool(squareTool);
 		}
@@ -615,7 +668,6 @@ const doLinesIntersect = (A, B, C, D) => {
 		if (currentTool.eventHandlers.keydown) {
 			currentTool.eventHandlers.keydown(event);
 		}
-		draw();
 	})
 
 	window.addEventListener("keyup", (event) => {
@@ -629,26 +681,41 @@ const doLinesIntersect = (A, B, C, D) => {
 		if (currentTool.eventHandlers.keyup) {
 			currentTool.eventHandlers.keyup(event);
 		}
-		draw();
 	})
 
 	canvas.addEventListener("mouseenter", (event) => {
 		userInCanvas = true;
-		//console.log("URIN");
 	})
 
 	canvas.addEventListener("mouseleave", (event) => {
 		userInCanvas = false;
-		//console.log("UROUT");
 	})
+
+	canvas.addEventListener("wheel", (event) => {
+		event.preventDefault();
+		if (!event.shiftKey) {
+			if (event.deltaY < 0) { //Wheel Up
+				camera.zoomFactor += 0.25;
+			}
+			if (event.deltaY > 0) { //Wheel Down
+				camera.zoomFactor -= 0.25;
+			}
+		}
+		if (event.shiftKey) {
+			if (event.deltaY < 0) { //Wheel Up
+				increaseGridSnap();
+			}
+			if (event.deltaY > 0) { //Wheel Down
+				decreaseGridSnap();
+			}
+		}
+		console.log(event);
+	})
+
 	canvas.addEventListener("mousemove", (event) => {
 		const rect = canvas.getBoundingClientRect();
 		mouse.x = event.clientX - rect.x;
 		mouse.y = event.clientY - rect.y;
-		//"Canvas coordinate-space"
-
-		//console.log("Mo2ve", mouse);
-		draw();
 	})
 
 	canvas.addEventListener("mousedown", (event) => {
@@ -657,36 +724,28 @@ const doLinesIntersect = (A, B, C, D) => {
 		if (currentTool.eventHandlers.mousedown) {
 			currentTool.eventHandlers.mousedown(event);
 		}
-		draw();
 	})
 
 	canvas.addEventListener("mouseup", (event) => {
-		//console.log("Up", event.buttons);
-		//dragger.isDragging = false;
 		if (currentTool.eventHandlers.mouseup) {
 			currentTool.eventHandlers.mouseup(event);
 		}
-		draw();
 	})
 }
 
 
 
-const mouseToWorld = () => {
-	return {
-		x: mouse.x / visualScale,
-		y: mouse.y / visualScale,
-	}
-}
 
 /**
- * @param {Coord} coord 
+ * @param {Coord} coord Coordinate in world-space
  * @returns {Coord}
  */
 const snapToGrid = (coord) => {
 	const snapScale = controller.snapScale;
 	const unsnapX = coord.x / snapScale;
 	const unsnapY = coord.y / snapScale;
+
+	//TODO: the snapping doesn't seem to quite work correctly when at a negative world coord
 
 	const [xint, xfrac] = [Math.floor(unsnapX), unsnapX - Math.trunc(unsnapX)];
 	const [yint, yfrac] = [Math.floor(unsnapY), unsnapY - Math.trunc(unsnapY)];
@@ -761,18 +820,10 @@ const iterateListSlidingWindow = (list, includeFirstNLast = false) => {
 */
 const drawShapes = () => {
 	ctx.save();
-	for (const shape of shapes) {
-		if (shape.drawCustom) shape.drawCustom();
-	}
-	ctx.restore();
-
-
-	ctx.save();
-	ctx.strokeStyle = "#000000";
-	ctx.fillStyle = "#DDDDDD";
 	ctx.beginPath();
 	for (const shape of shapes) {
 		
+		//TODO: not updated yet
 		if (shape.type === "door") {
 			const [v1, v2] = shape.vertices;
 			const dwidth = 0.3;
@@ -811,8 +862,9 @@ const drawShapes = () => {
 		}
 
 		for (const [v1, v2] of iterateListSlidingWindow(shape.vertices)) {
-			ctx.moveTo(v1.x * visualScale, v1.y * visualScale);
-			ctx.lineTo(v2.x * visualScale, v2.y * visualScale);
+			const [sc1, sc2] = [worldToScreen(v1), worldToScreen(v2)]
+			ctx.moveTo(sc1.x, sc1.y);
+			ctx.lineTo(sc2.x, sc2.y);
 		}
 	}
 	ctx.stroke();
@@ -820,16 +872,22 @@ const drawShapes = () => {
 }
 
 const imposeGridHatching = () => {
+	const cam = cameraAsRect();
+	const worldX = Math.floor(cam.x);
+	const worldY = Math.ceil(cam.y);
+
 	ctx.save();
 	ctx.strokeStyle = "#3AA1A580"
 	ctx.beginPath()
-	for (let y = 0; y < 40; y++) {
-		ctx.moveTo(-10, y * visualScale);
-		ctx.lineTo(ctx.canvas.width+10, y * visualScale);
+	for (let wy = worldY; wy > cam.y - cam.h; wy--) {
+		const {y} = worldToScreen(coord(0, wy));
+		ctx.moveTo(0, y);
+		ctx.lineTo(ctx.canvas.width, y);
 	}
-	for (let x = 0; x < 80; x++) {
-		ctx.moveTo(x * visualScale, -10);
-		ctx.lineTo(x * visualScale, ctx.canvas.height+10);
+	for (let wx = worldX; wx < cam.x + cam.w; wx++) {
+		const {x} = worldToScreen(coord(wx, 0));
+		ctx.moveTo(x, 0);
+		ctx.lineTo(x, ctx.canvas.height);
 	}
 	ctx.stroke();
 	ctx.restore();
@@ -837,8 +895,9 @@ const imposeGridHatching = () => {
 
 const drawMouseIndicator = () => {
 	const snapped = snapToGrid(mouseToWorld())
+	const drawLocation = worldToScreen(snapped);
 	ctx.beginPath();
-	ctx.arc(snapped.x * visualScale, snapped.y * visualScale, 2.5, 0, Math.PI * 2);
+	ctx.arc(drawLocation.x, drawLocation.y, 2.5, 0, Math.PI * 2);
 	ctx.stroke();
 }
 
@@ -851,11 +910,15 @@ const draw = () => {
 		ctx.fillStyle = "#DDDDDD";
 	}
 	ctx.save();
-	ctx.resetTransform();
 	ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+	
+	ctx.beginPath();
+	const origin = worldToScreen(coord(0, 0));
+	ctx.arc(origin.x, origin.y, 5, 0, Math.PI * 2);
+	ctx.fill();
+	ctx.stroke();
 	ctx.restore();
 
-	applyCamera();
 	imposeGridHatching();
 
 	drawShapes();
@@ -867,22 +930,23 @@ const draw = () => {
 	}
 
 	const ttt = canvas.getBoundingClientRect()
-	//ctx.strokeText(`Tool: ${currentTool.name}`, 20, ctx.canvas.height - 35);
-	ctx.strokeText(`Tool: ${currentTool.name}`, 20, ctx.canvas.height - 35);
-	//ctx.strokeText(`Snapscale: ${controller.snapScale * 5} ft`, 20, ctx.canvas.height - 5);
-	ctx.strokeText(`Snapscale: ${controller.snapScale * 5} ft`, 20, ctx.canvas.height - 5);
-}
-
-
-const applyCamera = () => {
-	const [viewportWidth, viewportHeight] = [ctx.canvas.width, ctx.canvas.height];
-	ctx.setTransform(
-		camera.zoom, 0,
-		0, camera.zoom,
-		(-camera.x * camera.zoom + viewportWidth/2),
-		(camera.y * camera.zoom + viewportHeight/2)
+	ctx.strokeText(
+		`Tool: ${currentTool.name}`,
+		ctx.canvas.width - 220,
+		ctx.canvas.height - 35
+	);
+	ctx.strokeText(
+		`Snapscale: ${controller.snapScale * 5} ft`,
+		ctx.canvas.width - 220,
+		ctx.canvas.height - 5
 	);
 }
+
+
+
+
+
+
 
 
 
@@ -891,7 +955,9 @@ const applyCamera = () => {
  */
 const update = (deltaTime) => {
 	if (!userInCanvas) return;
-	const speed = 100 / camera.zoom;
+	const speed = 10.0 / camera.zoomFactor;
+	const mod = speed * deltaTime;
+
 	if (keyboard.pressedKeys.includes("KeyD")) camera.x += speed * deltaTime;
 	if (keyboard.pressedKeys.includes("KeyA")) camera.x -= speed * deltaTime;
 	if (keyboard.pressedKeys.includes("KeyW")) camera.y += speed * deltaTime;
@@ -976,7 +1042,7 @@ document.getElementById("fileInput").addEventListener("change", (event) => {
 
 
 
-
+console.log(cameraAsRect())
 
 selectTool(lineTool);
 requestAnimationFrame(processFrame);
