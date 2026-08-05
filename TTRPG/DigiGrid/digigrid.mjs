@@ -304,9 +304,6 @@ const lineTool = {
 			const worldPos = mouseToWorld();
 			const snapped = snapToGrid(worldPos);
 
-			console.log("START", currentTool);
-
-			console.log("MB", mouseButtons)
 			//On initial press, go into additive or subtractive mode based on left/right click
 			if (!currentTool.active && mouseButtons.right) {
 				currentTool.name = "Line (Delete)";
@@ -318,8 +315,6 @@ const lineTool = {
 				currentTool.name = "Line (Draw)";
 			}
 			currentTool.active = true;
-
-			console.log(currentTool);
 
 			//When in add-mode, drop a vertex when a button is pressed
 			if (currentTool.modeAdditive && mouseButtons.any) {
@@ -498,7 +493,7 @@ const doorTool = {
 
 /**
  * 
- * @param {Shape} shape where there is at least one intersection with the line
+ * @param {Shape} shape where there is at least one intersection with line AB
  * @param {*} A 
  * @param {*} B 
  */
@@ -780,14 +775,38 @@ const drawShapes = () => {
 		
 		if (shape.type === "door") {
 			const [v1, v2] = shape.vertices;
-			ctx.moveTo(v1.x * visualScale, v1.y * visualScale);
-			ctx.lineTo(v2.x * visualScale, v2.y * visualScale);
-
-			ctx.moveTo((v1.x + 0.5) * visualScale, (v1.y + 0.5) * visualScale);
-			ctx.lineTo((v2.x + 0.5) * visualScale, (v2.y + 0.5) * visualScale);
-
-			ctx.moveTo((v1.x - 0.5) * visualScale, (v1.y - 0.5) * visualScale);
-			ctx.lineTo((v2.x - 0.5) * visualScale, (v2.y - 0.5) * visualScale);
+			const dwidth = 0.3;
+			const lenBeforeDoor = 0.25;
+			if (v1.x == v2.x) {
+				//Vert door
+				ctx.rect(
+					(v1.x - dwidth/2) * visualScale,
+					(Math.min(v1.y, v2.y) + lenBeforeDoor) * visualScale,
+					dwidth * visualScale,
+					(Math.abs(v2.y - v1.y) - 2 * lenBeforeDoor) * visualScale
+				);
+				ctx.moveTo(v1.x * visualScale, v1.y * visualScale);
+				ctx.lineTo(v1.x * visualScale, (v1.y + lenBeforeDoor * ((v1.y > v2.y) ? -1 : 1)) * visualScale);
+				ctx.moveTo(v2.x * visualScale, v2.y * visualScale);
+				ctx.lineTo(v2.x * visualScale, (v2.y - lenBeforeDoor * ((v1.y > v2.y) ? -1 : 1)) * visualScale);
+			}
+			else if (v1.y == v2.y) {
+				//Horiz door
+				ctx.rect(
+					(Math.min(v1.x, v2.x) + lenBeforeDoor) * visualScale,
+					(v1.y - dwidth/2) * visualScale,
+					(Math.abs(v2.x - v1.x) - 2 * lenBeforeDoor) * visualScale,
+					dwidth * visualScale
+				);
+				ctx.moveTo(v1.x * visualScale, v1.y * visualScale);
+				ctx.lineTo((v1.x + lenBeforeDoor * ((v1.x > v2.x) ? -1 : 1)) * visualScale, v1.y * visualScale);
+				ctx.moveTo(v2.x * visualScale, v2.y * visualScale);
+				ctx.lineTo((v2.x - lenBeforeDoor * ((v1.x > v2.x) ? -1 : 1)) * visualScale, v2.y * visualScale);
+			}
+			else {
+				ctx.moveTo(v1.x * visualScale, v1.y * visualScale);
+				ctx.lineTo(v2.x * visualScale, v2.y * visualScale);
+			}
 			continue;
 		}
 
