@@ -282,7 +282,6 @@ const selectTool = (defaultTool) => {
  `----'                                `---'  
 */
 
-//TODO: something is still wrong with the drawing
 /** @type {DefaultTool} */
 const squareTool = {
 	defaultState: {
@@ -636,6 +635,8 @@ const isClockwise = (A, B, C) => {
  * @param {Coord} B 
  * @param {Coord} C 
  * @param {Coord} D 
+ * @note https://bryceboe.com/2006/10/23/line-segment-intersection-algorithm/
+ * @note Derived from the dot product of a perpendicular vector, related to the Z-component of the vector cross product
  */
 const doLinesIntersect = (A, B, C, D) => {
 	return (
@@ -906,8 +907,6 @@ const drawShapes = () => {
 	ctx.save();
 	ctx.beginPath();
 	for (const shape of shapes) {
-		
-		//TODO: not updated yet
 		if (shape.type === "door") {
 			for (const {p1, p2} of produceDoorWorldspaceLines(shape)) {
 				const [sc1, sc2] = [worldToScreen(p1), worldToScreen(p2)];
