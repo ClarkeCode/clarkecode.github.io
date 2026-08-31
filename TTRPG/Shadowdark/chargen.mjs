@@ -247,6 +247,8 @@ const makeChar = () => {
 		languages: chosenRace.languageListFunc(),
 		background: background(),
 		stats: statline(),
+
+		level: 0,
 	};
 }
 
@@ -307,4 +309,47 @@ const refreshChar = () => {
 	document.getElementById("char.card").style.visibility = "visible";
 }
 refreshChar();
+
+
+
+const titles = {
+	fighter: {
+		lawful:  ["Squire",  "Cavalier",  "Knight",      "Thane",    "Lord/Lady"],
+		neutral: ["Warrior", "Barbarian", "Battlerager", "Warchief", "Chieftan"],
+		chaotic: ["Knave",   "Bandit",    "Slayer",      "Reaver",   "Warlord"],
+	},
+	priest: {
+		lawful:  ["Acolyte",  "Crusader", "Templar",  "Champion", "Paladin"],
+		neutral: ["Seeker",   "Invoker",  "Haruspex", "Mystic",   "Oracle"],
+		chaotic: ["Initiate", "Zealot",   "Cultist",  "Scourge",  "Chaos Knight"],
+	},
+	thief: {
+		lawful:  ["Footpad", "Burglar",   "Rook",   "Underboss", "Boss"],
+		neutral: ["Robber",  "Outlaw",    "Rouge",  "Renegade",  "Bandit King/Queen"],
+		chaotic: ["Thug",    "Cutthroat", "Shadow", "Assassin",  "Wraith"],
+	},
+	wizard: {
+		lawful:  ["Apprentice", "Conjurer",  "Arcanist",      "Mage",      "Archmage"],
+		neutral: ["Shaman",     "Seer",      "Warden",        "Sage",      "Druid"],
+		chaotic: ["Adept",      "Channeler", "Witch/Warlock", "Diabolist", "Sorcerer"],
+	},
+	bard: {
+		lawful:  ["Storyteller", "Balladeer", "Philosopher", "Poet",         "Master Poet"],
+		neutral: ["Seeker",      "Witness",   "Speaker",     "Voice",        "Truthbearer"],
+		chaotic: ["Guttersnipe", "Charlatan", "Satirist",    "Silvertongue", "Doomspeaker"],
+	},
+	ranger: {
+		lawful:  ["Wanderer", "Strider",  "Warden",    "Guardian", "Sentinel"],
+		neutral: ["Stranger", "Wayfarer", "Outlander", "Recluse",  "Hermit"],
+		chaotic: ["Hood",     "Outlaw",   "Fugitive",  "Exile",    "Pariah"],
+	},
+};
+
+
+
+
+
+
+
+
 
